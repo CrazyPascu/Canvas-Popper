@@ -1,0 +1,214 @@
+#chat-notifications.sidebar-window-chat-hidden {
+  display: none;
+}
+
+#scene-controls.sidebar-window-toolbar-anchor,
+#hotbar.sidebar-window-toolbar-anchor,
+#players.sidebar-window-toolbar-anchor {
+  display: none;
+}
+
+#ui-left:has(#scene-controls.sidebar-window-toolbar-anchor) {
+  --control-columns: 1 !important;
+}
+
+#scene-controls.sidebar-window-scene-controls {
+  align-items: flex-start;
+  gap: 8px;
+  height: 100dvh;
+  padding: 8px;
+  overflow: auto;
+  pointer-events: auto;
+}
+
+#scene-controls.sidebar-window-scene-controls > menu {
+  width: auto;
+  height: auto;
+  gap: 4px;
+}
+
+#scene-controls.sidebar-window-scene-controls #scene-controls-tools {
+  flex-wrap: nowrap;
+}
+
+#ui-left-column-1 > #players {
+  margin-top: auto;
+}
+
+#players #performance-stats:has(.sidebar-window-toolbar-toggle) {
+  gap: 4px;
+}
+
+#players .sidebar-window-toolbar-toggle {
+  --control-size: 20px;
+}
+
+#players.sidebar-window-players {
+  width: 100%;
+  max-height: 100dvh;
+  padding: 8px;
+  overflow: auto;
+}
+
+#players.sidebar-window-players :is(#players-active, #players-inactive) {
+  width: 100%;
+}
+
+#hotbar.sidebar-window-hotbar {
+  --hotbar-size: 40px;
+  width: 100%;
+  height: auto;
+  max-height: 100dvh;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  transform: none;
+}
+
+#hotbar.sidebar-window-hotbar #action-bar {
+  flex: 1;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  gap: 4px;
+}
+
+#hotbar.sidebar-window-hotbar .hotbar-controls {
+  height: 54px;
+}
+
+#sidebar.sidebar-window-detached {
+  --sidebar-width: 100%;
+  width: 100%;
+  height: 100dvh;
+  flex-direction: column;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.sidebar-window-detached #sidebar-tabs {
+  padding: 8px;
+  align-items: flex-start;
+  gap: 4px;
+  border-bottom: 1px solid var(--color-tabs-border);
+}
+
+.sidebar-window-detached #sidebar-tabs > menu {
+  flex: 1;
+  min-width: 0;
+  flex-flow: row wrap;
+  gap: 4px;
+}
+
+.sidebar-window-detached #sidebar-tabs li:has(> :is([data-action="toggleState"], .sidebar-window-pinned-tab)) {
+  display: none;
+}
+
+.sidebar-window-detached #sidebar-content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  width: auto;
+  margin: 0;
+  align-items: stretch;
+}
+
+#sidebar.sidebar-window-detached.sidebar-window-split {
+  display: grid;
+  grid-template-columns: var(--sidebar-window-columns);
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow-x: auto;
+}
+
+.sidebar-window-split > .sidebar-window-pinned-header {
+  grid-row: 1;
+  grid-column: var(--sidebar-window-column);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px;
+  border-bottom: 1px solid var(--color-tabs-border);
+}
+
+.sidebar-window-pinned-header > .ellipsis {
+  min-width: 0;
+  line-height: var(--control-size);
+  font-weight: 600;
+}
+
+.sidebar-window-split > #sidebar-tabs {
+  grid-row: 1;
+  grid-column: var(--sidebar-window-main-column);
+  min-width: 0;
+}
+
+.sidebar-window-split > #sidebar-content {
+  grid-area: 2 / 1 / 3 / -1;
+  display: grid;
+  grid-template-columns: var(--sidebar-window-columns);
+  grid-template-rows: minmax(0, 1fr);
+  pointer-events: auto;
+}
+
+.sidebar-window-split > #sidebar-content > :is(.tab, .sidebar-window-empty) {
+  grid-row: 1;
+  grid-column: var(--sidebar-window-main-column);
+  min-width: 0;
+  min-height: 0;
+  height: auto;
+}
+
+.sidebar-window-split > #sidebar-content > .sidebar-window-pinned {
+  grid-column: var(--sidebar-window-column);
+}
+
+.sidebar-window-empty {
+  align-self: start;
+  margin: 16px;
+  color: var(--color-text-subtle);
+}
+
+.sidebar-window-split > .sidebar-window-divider {
+  position: relative;
+  grid-row: 1 / -1;
+  grid-column: var(--sidebar-window-column);
+  justify-self: end;
+  width: 9px;
+  transform: translateX(50%);
+  z-index: 1;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.sidebar-window-divider::before {
+  position: absolute;
+  inset-block: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--color-text-subtle);
+  opacity: 0.55;
+  content: "";
+}
+
+.sidebar-window-divider::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+  border-radius: 2px;
+  background: var(--color-text-subtle);
+  content: "";
+}
+
+.sidebar-window-divider:is(:hover, :active, :focus-visible)::before {
+  width: 2px;
+  opacity: 1;
+}
+
+.sidebar-window-split .placeables-sidebar > nav {
+  flex-wrap: wrap;
+}

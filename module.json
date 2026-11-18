@@ -1,0 +1,24 @@
+
+{
+  "id": "canvas-popper",
+  "title": "Canvas Popper",
+  "description": "A module to display the elements displayed over the canvas in separate pop out windows.",
+  "version": "1.0.0",
+  "authors": [
+    {
+      "discord": "CrazyPascu",
+      "name": "CrazyPascu",
+      "url": "https://github.com/CrazyPascu"
+    }
+  ],
+  "compatibility": {
+    "minimum": "14",
+    "verified": "14"
+  },
+  "esmodules": [
+    "scripts/main.js"
+  ],
+  "styles": [
+    "styles/module.css"
+  ]
+}
