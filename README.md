@@ -40,14 +40,15 @@ Click the popout icon on the widget you want to move. Close its popup or click i
 
 ## Detached sidebar
 
-The detached sidebar puts the tabs your user can access across the top. Selecting a tab opens its content below. The tab buttons wrap when the window gets narrower.
+The detached sidebar puts the tabs your user can access across the top. Selecting a tab opens its content below. When the window gets narrower, use the mouse wheel over the tab row to scroll sideways. The pin button stays at the right edge.
 
 ### Pinning tabs
 
 1. Select a tab and click **Pin selected tab** at the right end of the header.
 2. The pinned tab opens on the left and its icon leaves the browsing header. Each additional pin appears between the existing pins and the browsing pane.
-3. Drag a divider to resize the neighboring columns. You can also focus the divider and use the left and right arrow keys. Scroll horizontally when the columns extend beyond the window.
-4. Click **Unpin** in a pinned column’s header to restore that tab’s icon. Pins and column widths last for the current popup session.
+3. Drag a pinned header left or right to rearrange the pinned columns. The whole column moves with the header, and neighboring columns snap into place as you drag.
+4. Drag a divider to resize the neighboring columns. You can also focus the divider and use the left and right arrow keys. Scroll horizontally when the columns extend beyond the window.
+5. Click **Unpin** in a pinned column’s header to restore that tab’s icon. Pins and column widths last for the current popup session.
 
 ![Detached sidebar with Chat and Combat Encounters pinned beside the Scenes tab](assets/sidebar-popout.png)
 

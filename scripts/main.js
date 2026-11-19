@@ -169,8 +169,9 @@ async function openSidebar(sidebar, toggle) {
 
 function createSidebarPinning(sidebar, tabs, popup) {
   const { element } = sidebar;
+  const menu = tabs.querySelector(":scope > menu");
   const content = element.querySelector("#sidebar-content");
-  const columns = new Map();
+  let columns = new Map();
   const minimumPinnedWidth = 140;
   const minimumMainWidth = 200;
   const pin = createButton("Pin selected tab", "fa-thumbtack");
@@ -185,6 +186,8 @@ function createSidebarPinning(sidebar, tabs, popup) {
 
   let browsingTab = sidebar.tabGroups.primary;
   let previousTab;
+  let cancelReorder;
+  let draggedTab;
 
   function getUnpinnedTabs() {
     return Array.from(tabs.querySelectorAll("li:not([hidden]) > button[data-group='primary']"))
@@ -192,12 +195,18 @@ function createSidebarPinning(sidebar, tabs, popup) {
       .filter(tab => !columns.has(tab));
   }
 
+  function getColumnGap() {
+    return parseFloat(popup.getComputedStyle(element).columnGap) || 0;
+  }
+
   function maximumWidth(column, next) {
     if (next) return column.width + next.width - minimumPinnedWidth;
-    return Math.max(column.width, minimumPinnedWidth * 2, element.clientWidth - minimumMainWidth);
+    const available = element.clientWidth - minimumMainWidth - columns.size * getColumnGap();
+    return Math.max(column.width, minimumPinnedWidth * 2, available);
   }
 
   function resizeColumn(column, width) {
+    cancelReorder?.();
     const ordered = [...columns.values()];
     const next = ordered[ordered.indexOf(column) + 1];
     const clamped = Math.max(minimumPinnedWidth, Math.min(maximumWidth(column, next), width));
@@ -232,14 +241,17 @@ function createSidebarPinning(sidebar, tabs, popup) {
     empty.hidden = !columns.size || Boolean(browsingTab);
     pin.disabled = !browsingTab;
     let index = 0;
-    for (const column of columns.values()) {
+    for (const [tab, column] of columns) {
       column.index = String(++index);
-      column.header.style.setProperty("--sidebar-window-column", column.index);
-      column.divider.style.setProperty("--sidebar-window-column", column.index);
+      for (const part of [column.header, column.divider]) {
+        part.style.setProperty("--sidebar-window-column", column.index);
+        part.classList.toggle("sidebar-window-column-dragging", tab === draggedTab);
+      }
     }
     for (const panel of content.querySelectorAll(":scope > .tab[data-group='primary']")) {
       const column = columns.get(panel.dataset.tab);
       panel.classList.toggle("sidebar-window-pinned", Boolean(column));
+      panel.classList.toggle("sidebar-window-column-dragging", panel.dataset.tab === draggedTab);
       if (column) panel.style.setProperty("--sidebar-window-column", column.index);
       else panel.style.removeProperty("--sidebar-window-column");
       // Foundry uses the active class for both panel visibility and tab-specific layout.
@@ -253,6 +265,7 @@ function createSidebarPinning(sidebar, tabs, popup) {
 
   pin.addEventListener("click", () => {
     if (!browsingTab) return;
+    cancelReorder?.();
     const tab = browsingTab;
     const button = tabs.querySelector(`button[data-tab="${CSS.escape(tab)}"]`);
     const title = button.getAttribute("aria-label");
@@ -271,6 +284,7 @@ function createSidebarPinning(sidebar, tabs, popup) {
     column.divider = createPaneDivider(column, title, minimumPinnedWidth, resizeColumn);
     columns.set(tab, column);
     element.append(header, column.divider);
+    header.addEventListener("pointerdown", event => startColumnReorder(event, tab));
     unpin.addEventListener("click", () => unpinTab(tab));
 
     const alternatives = getUnpinnedTabs();
@@ -281,7 +295,128 @@ function createSidebarPinning(sidebar, tabs, popup) {
     (pin.disabled ? unpin : pin).focus({ preventScroll: true });
   });
 
+  function startColumnReorder(event, tab) {
+    if (columns.size < 2 || cancelReorder || !event.isPrimary || event.button !== 0 || event.target.closest("button")) return;
+    event.preventDefault();
+
+    const { pointerId, clientX: startX, currentTarget: header } = event;
+    const originalColumns = columns;
+    const neighbors = [...originalColumns];
+    const from = neighbors.findIndex(([key]) => key === tab);
+    const [entry] = neighbors.splice(from, 1);
+    const column = entry[1];
+    const gap = getColumnGap();
+    const draggedSpan = column.width + gap;
+    const slotStarts = [0];
+    for (const [, neighbor] of neighbors) slotStarts.push(slotStarts.at(-1) + neighbor.width + gap);
+    // Keep the snap thresholds fixed as neighboring columns change positions.
+    const centers = neighbors.map(([, neighbor], index) =>
+      slotStarts[index] + neighbor.width / 2 + (index >= from ? draggedSpan : 0)
+    );
+
+    const viewportLeft = element.getBoundingClientRect().left + element.clientLeft;
+    const initialScroll = element.scrollLeft;
+    const lastSlot = slotStarts.at(-1);
+    const pinnedRight = lastSlot + draggedSpan;
+    const listeners = new AbortController();
+    const options = { signal: listeners.signal };
+    let clientX = startX;
+    let destination = from;
+    let frame = 0;
+
+    function updatePreview() {
+      const scroll = element.scrollLeft;
+      const pointerX = clientX - viewportLeft + scroll;
+      const next = centers.findIndex(center => pointerX < center);
+      const target = next === -1 ? neighbors.length : next;
+      const left = Math.max(0, Math.min(lastSlot, slotStarts[from] + clientX - startX + scroll - initialScroll));
+      element.style.setProperty("--sidebar-window-drag-offset", `${left - slotStarts[target]}px`);
+
+      if (target !== destination) {
+        destination = target;
+        const order = neighbors.slice();
+        order.splice(destination, 0, entry);
+        columns = new Map(order);
+        refresh();
+      }
+    }
+
+    function scrollAtEdge() {
+      frame = 0;
+      const x = clientX - viewportLeft;
+      const right = element.clientWidth - x;
+      const previous = element.scrollLeft;
+      const maxScroll = pinnedRight - element.clientWidth;
+      const edge = 32;
+      const maxStep = 16;
+      if (x < edge) element.scrollLeft -= Math.min(edge - x, maxStep);
+      else if (right < edge && previous < maxScroll) {
+        element.scrollLeft = Math.min(maxScroll, previous + Math.min(edge - right, maxStep));
+      }
+      if (element.scrollLeft === previous) return;
+      updatePreview();
+      frame = popup.requestAnimationFrame(scrollAtEdge);
+    }
+
+    function move(pointer) {
+      if (pointer.pointerId !== pointerId) return;
+      clientX = pointer.clientX;
+      if (!draggedTab) {
+        if (Math.abs(clientX - startX) < 4) return;
+        draggedTab = tab;
+        refresh();
+      }
+      updatePreview();
+      if (!frame) frame = popup.requestAnimationFrame(scrollAtEdge);
+    }
+
+    function finish() {
+      cancelReorder = undefined;
+      listeners.abort();
+      if (frame) popup.cancelAnimationFrame(frame);
+      if (header.hasPointerCapture(pointerId)) header.releasePointerCapture(pointerId);
+      if (!draggedTab) return;
+      draggedTab = undefined;
+      element.style.removeProperty("--sidebar-window-drag-offset");
+      refresh();
+    }
+
+    function cancel() {
+      columns = originalColumns;
+      finish();
+    }
+
+    function drop(pointer) {
+      if (pointer.pointerId !== pointerId) return;
+      if (draggedTab) {
+        clientX = pointer.clientX;
+        updatePreview();
+      }
+      finish();
+      if (destination === from) return;
+
+      // Keep the capture target in the DOM until release, then match tab order to the grid.
+      const nextHeader = neighbors[destination]?.[1].header;
+      if (nextHeader) nextHeader.before(header, column.divider);
+      else element.append(header, column.divider);
+    }
+
+    function cancelPointer(pointer) {
+      if (pointer.pointerId === pointerId) cancel();
+    }
+
+    header.setPointerCapture(pointerId);
+    cancelReorder = cancel;
+    header.addEventListener("pointermove", move, options);
+    header.addEventListener("pointerup", drop, options);
+    header.addEventListener("pointercancel", cancelPointer, options);
+    header.addEventListener("lostpointercapture", cancelPointer, options);
+    popup.addEventListener("blur", cancel, options);
+    popup.addEventListener("resize", cancel, options);
+  }
+
   function removeColumn(tab) {
+    cancelReorder?.();
     const { header, divider } = columns.get(tab);
     header.remove();
     divider.remove();
@@ -296,6 +431,20 @@ function createSidebarPinning(sidebar, tabs, popup) {
     pin.focus();
   }
 
+  function scrollTabs(event) {
+    const { deltaMode, deltaX, deltaY, ctrlKey } = event;
+    if (ctrlKey || deltaX || !deltaY || menu.scrollWidth <= menu.clientWidth) return;
+
+    let pixelsPerUnit = 1;
+    if (deltaMode === WheelEvent.DOM_DELTA_LINE) pixelsPerUnit = parseFloat(getComputedStyle(menu).fontSize);
+    else if (deltaMode === WheelEvent.DOM_DELTA_PAGE) pixelsPerUnit = menu.clientWidth;
+
+    const previousOffset = menu.scrollLeft;
+    menu.scrollLeft += deltaY * pixelsPerUnit;
+    if (menu.scrollLeft !== previousOffset) event.preventDefault();
+  }
+
+  menu.addEventListener("wheel", scrollTabs, { passive: false });
   popup.addEventListener("resize", updateWidths);
   return {
     get hasPins() { return Boolean(columns.size); },
@@ -305,6 +454,7 @@ function createSidebarPinning(sidebar, tabs, popup) {
     },
     refresh,
     dispose() {
+      menu.removeEventListener("wheel", scrollTabs);
       popup.removeEventListener("resize", updateWidths);
       for (const tab of columns.keys()) removeColumn(tab);
       if (browsingTab) sidebar.changeTab(browsingTab, "primary");
