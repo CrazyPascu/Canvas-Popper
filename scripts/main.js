@@ -1,7 +1,7 @@
 import { supportDetachedChat } from "./detached-chat.js";
 import { registerToolbarWindows } from "./toolbar-windows.js";
 
-const MODULE_ID = "sidebar-window";
+const MODULE_ID = "canvas-popper";
 const COMPACT_CHAT_SETTING = "showCompactChat";
 const DETACH_LABEL = "Open sidebar in a separate window";
 const RETURN_LABEL = "Return sidebar to Foundry";
@@ -21,6 +21,22 @@ Hooks.once("init", () => {
     default: false,
     onChange: () => detachedSidebar?.chat.setShowCompactChat(game.settings.get(MODULE_ID, COMPACT_CHAT_SETTING))
   });
+});
+
+Hooks.once("ready", async () => {
+  const userSettings = game.settings.storage.get("user");
+  const user = game.userId;
+  for (const { id, key, namespace, scope, type } of game.settings.settings.values()) {
+    if (namespace !== MODULE_ID || scope !== "user" || type !== Boolean) continue;
+    if (userSettings.getSetting(id, user)) continue;
+    const previous = userSettings.getSetting(`sidebar-window.${key}`, user);
+    if (typeof previous?.value !== "boolean") continue;
+    try {
+      await game.settings.set(MODULE_ID, key, previous.value);
+    } catch (error) {
+      console.error(`Canvas Popper | Could not migrate the ${key} setting`, error);
+    }
+  }
 });
 
 Hooks.on("renderSidebar", (sidebar, element) => {

@@ -71,7 +71,7 @@ The live chat composer and controls attached to it, including Dice Tray, follow 
 
 ## Settings
 
-Open **Settings → Configure Settings** and search for the option by name. The current build lists these options under **Unmapped** in Foundry v14. Each setting is saved per user and takes effect when you save it.
+Open **Settings → Configure Settings → Canvas Popper**. Each setting is saved per user and takes effect when you save it. Previously saved Sidebar Window preferences carry over when you load the world.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -83,16 +83,4 @@ Open **Settings → Configure Settings** and search for the option by name. The 
 
 Turning off a popout setting docks its widget if the window is open and removes the popout button.
 
-<!-- Add a settings screenshot here. -->
-
-## Publishing a release
-
-Set the version in `module.json` and commit it with the code and release workflow. Push a matching tag with a leading `v`. For the current version, use these commands after committing.
-
-```bash
-git push origin main
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-The **Release** workflow builds and uploads `module.json` and `module.zip`. GitHub adds the two source-code archives automatically. Check the **Actions** tab for the run and **Releases** for the published assets.
+![Canvas Popper module Settings](assets/settings.png)
