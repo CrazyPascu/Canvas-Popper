@@ -87,14 +87,14 @@
   overflow: hidden;
 }
 
-body:has(> #sidebar.sidebar-window-detached) > .sidebar-window-creation-dialog {
+body:has(> #sidebar.sidebar-window-detached) > .sidebar-window-dialog {
   min-width: 0;
   min-height: 0;
   max-width: 100dvw;
   max-height: 100dvh;
 }
 
-body:has(> #sidebar.sidebar-window-detached) > .sidebar-window-creation-dialog > .window-content {
+body:has(> #sidebar.sidebar-window-detached) > .sidebar-window-dialog > .window-content {
   min-height: 0;
   overflow: auto;
 }

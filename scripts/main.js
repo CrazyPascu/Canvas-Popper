@@ -1,10 +1,12 @@
-import { keepSidebarWindowOpen, registerSidebarCreationDialogs } from "./creation-dialogs.js";
+import { registerSidebarCreationDialogs } from "./creation-dialogs.js";
 import { supportDetachedChat } from "./detached-chat.js";
+import { keepSidebarWindowOpen, registerDnd5eRollDialogs, registerSidebarDialogPlacement } from "./sidebar-dialogs.js";
 import { registerToolbarWindows } from "./toolbar-windows.js";
 
 const MODULE_ID = "canvas-popper";
 const COMPACT_CHAT_SETTING = "showCompactChat";
 const CREATION_DIALOG_SETTING = "creationDialogPlacement";
+const DND5E_ROLL_DIALOG_SETTING = "showDnd5eRollDialogsInSidebar";
 const DETACH_LABEL = "Open sidebar in a separate window";
 const RETURN_LABEL = "Return sidebar to Foundry";
 const DETACH_ICON = "fa-arrow-up-right-from-square";
@@ -35,6 +37,16 @@ Hooks.once("init", () => {
     },
     default: "sidebar"
   });
+  const isDnd5e = game.system.id === "dnd5e";
+  game.settings.register(MODULE_ID, DND5E_ROLL_DIALOG_SETTING, {
+    name: "D&D 5e roll dialogs in sidebar",
+    hint: "Open roll configuration in the detached sidebar when a D&D 5e roll starts there.",
+    scope: "user",
+    config: isDnd5e,
+    type: Boolean,
+    default: false
+  });
+  if (isDnd5e) registerDnd5eRollDialogs(() => getSidebarDialogPopup("roll"));
 });
 
 Hooks.once("ready", async () => {
@@ -112,9 +124,16 @@ function labelButton(button, label) {
 }
 
 registerToolbarWindows(MODULE_ID, { createButton, labelButton });
-registerSidebarCreationDialogs(() => {
-  if (detachedSidebar && game.settings.get(MODULE_ID, CREATION_DIALOG_SETTING) === "sidebar") return detachedSidebar.popup;
-});
+registerSidebarDialogPlacement(getSidebarDialogPopup);
+registerSidebarCreationDialogs(() => getSidebarDialogPopup("creation"));
+
+function getSidebarDialogPopup(kind) {
+  if (!detachedSidebar) return;
+  if (kind === "creation" && game.settings.get(MODULE_ID, CREATION_DIALOG_SETTING) === "sidebar") return detachedSidebar.popup;
+  if (kind === "roll" && game.system.id === "dnd5e" && game.settings.get(MODULE_ID, DND5E_ROLL_DIALOG_SETTING)) {
+    return detachedSidebar.popup;
+  }
+}
 
 async function openSidebar(sidebar, toggle) {
   if (opening || detachedSidebar) return;

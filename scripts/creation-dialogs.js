@@ -1,33 +1,19 @@
+import { isDetachedSidebarSource, sidebarDialogOptions } from "./sidebar-dialogs.js";
+
 export function registerSidebarCreationDialogs(getPopup) {
   const { api, sidebar, handlebars, ux } = foundry.applications;
   const { Folder } = foundry.documents;
   const { CompendiumCollection } = foundry.documents.collections;
 
-  // Directory actions can open either core forms or system-provided ApplicationV2 forms.
-  // Use the host requested by that action when the form first renders.
-  const application = api.ApplicationV2.prototype;
-  const configure = application._configureRenderOptions;
-  application._configureRenderOptions = function(options) {
-    const windowId = this.options.canvasPopperCreationWindowId;
-    if (options.isFirstRender && windowId) {
-      const popup = getPopup();
-      if (popup && !popup.closed && popup.id === windowId) (options.window ??= {}).windowId = windowId;
-    }
-    return configure.call(this, options);
-  };
-
   function routeAction(Directory, action, open) {
     const original = Directory.prototype[action];
     Directory.prototype[action] = function(event, target, ...args) {
       const popup = getPopup();
-      if (!popup || popup.closed || target?.ownerDocument?.defaultView !== popup || !ui.sidebar.element.contains(target)) {
+      if (!isDetachedSidebarSource(popup, target)) {
         return original.call(this, event, target, ...args);
       }
       const { folderId } = target.closest(".directory-item")?.dataset ?? {};
-      return open.call(this, event, folderId ?? null, {
-        canvasPopperCreationWindowId: popup.id,
-        classes: ["sidebar-window-creation-dialog"]
-      });
+      return open.call(this, event, folderId ?? null, sidebarDialogOptions(popup, "creation"));
     };
   }
 
@@ -89,20 +75,4 @@ export function registerSidebarCreationDialogs(getPopup) {
     const pack = await CompendiumCollection.createCompendium(metadata);
     if (targetFolder) await pack.setFolder(targetFolder);
   });
-}
-
-export async function keepSidebarWindowOpen(popup) {
-  // The sidebar DOM is moved separately. Register a frameless app so Foundry
-  // keeps the window open after its last dialog closes.
-  class SidebarDialogHost extends foundry.applications.api.ApplicationV2 {
-    static DEFAULT_OPTIONS = { window: { frame: false, positioned: false } };
-
-    _renderHTML() {}
-
-    _replaceHTML(_result, element) {
-      element.hidden = true;
-    }
-  }
-
-  await new SidebarDialogHost().render({ force: true, window: { windowId: popup.id } });
 }

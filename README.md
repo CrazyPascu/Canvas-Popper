@@ -56,6 +56,10 @@ The detached sidebar puts the tabs your user can access across the top. Selectin
 
 The **Creation dialog placement** setting controls where sidebar creation dialogs open. **Window-constrained popups** opens them inside the detached sidebar. **Normal popups** opens them in the main Foundry window. This applies to creation actions such as Create Actor, Create Item, Create Folder, and Create Compendium. Document sheets opened after creation appear in the main window.
 
+### D&D 5e roll configuration
+
+Enable **D&D 5e roll dialogs in sidebar** to open roll prompts in the detached sidebar when you roll from there, such as during individual initiative rolls or requests in Chat. The setting is available in D&D 5e worlds.
+
 ### Dragging documents between windows
 
 Foundry’s permissions and the destination’s normal drop rules still apply.
@@ -81,6 +85,7 @@ Open **Settings → Configure Settings → Canvas Popper**. Each setting is save
 | Setting | Default | What it does |
 | --- | --- | --- |
 | **Creation dialog placement** | Window-constrained popups | Chooses where creation dialogs launched from the detached sidebar open. |
+| **D&D 5e roll dialogs in sidebar** | Off | Opens roll configuration from the detached sidebar in D&D 5e worlds. |
 | **Show compact chat** | Off | Shows compact chat in the main window while the sidebar is detached and Chat is neither selected nor pinned. |
 | **Enable Scene Controls popout** | On | Adds the Scene Controls popout button. |
 | **Disable Scene Controls tooltips** | Off | Hides hover tooltips and tool previews for Scene Controls buttons, both docked and detached. |
