@@ -263,3 +263,53 @@ body:has(> #sidebar.sidebar-window-detached) > .sidebar-window-dialog > .window-
 .sidebar-window-split .placeables-sidebar > nav {
   flex-wrap: wrap;
 }
+
+.canvas-popper-touch-mode {
+  --canvas-popper-touch-size: 44px;
+}
+
+.canvas-popper-touch-mode :is(#sidebar.sidebar-window-detached, #scene-controls.sidebar-window-scene-controls) {
+  --control-size: var(--canvas-popper-touch-size);
+}
+
+.canvas-popper-touch-mode :is(button, a.button, a[data-action], [role="button"]):not(.notification-pip) {
+  min-inline-size: var(--canvas-popper-touch-size);
+  min-block-size: var(--canvas-popper-touch-size);
+}
+
+.canvas-popper-touch-mode a[data-action]:not(.button, .notification-pip) {
+  display: inline-flex;
+  align-items: center;
+}
+
+.canvas-popper-touch-mode :is(select, input[type="text"], input[type="search"], input[type="number"], #players .player, #context-menu .context-item) {
+  min-block-size: var(--canvas-popper-touch-size);
+}
+
+.canvas-popper-touch-mode .sidebar-window-detached :is(.directory-header .action-buttons, #chat-controls, #chat-controls .control-buttons, .combatant-controls, .placeables-sidebar > nav) {
+  flex-wrap: wrap;
+}
+
+.canvas-popper-touch-mode .sidebar-window-detached .sidebar-tab {
+  --sidebar-folder-height: var(--canvas-popper-touch-size);
+}
+
+.canvas-popper-touch-mode .sidebar-window-dialog {
+  --header-height: var(--canvas-popper-touch-size);
+}
+
+.canvas-popper-touch-mode .sidebar-window-divider {
+  width: 19px;
+}
+
+.canvas-popper-touch-mode #hotbar.sidebar-window-hotbar {
+  --hotbar-size: var(--canvas-popper-touch-size);
+}
+
+.canvas-popper-touch-mode #hotbar.sidebar-window-hotbar .hotbar-controls {
+  height: auto;
+}
+
+.canvas-popper-touch-mode #hotbar.sidebar-window-hotbar .hotbar-page-number {
+  pointer-events: none;
+}

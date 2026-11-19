@@ -84,6 +84,7 @@ Open **Settings → Configure Settings → Canvas Popper**. Each setting is save
 
 | Setting | Default | What it does |
 | --- | --- | --- |
+| **Touch mode** | Off | Enlarges buttons, tabs, macro slots, and other interactive controls in Canvas Popper?s detached windows. |
 | **Creation dialog placement** | Window-constrained popups | Chooses where creation dialogs launched from the detached sidebar open. |
 | **D&D 5e roll dialogs in sidebar** | Off | Opens roll configuration from the detached sidebar in D&D 5e worlds. |
 | **Show compact chat** | Off | Shows compact chat in the main window while the sidebar is detached and Chat is neither selected nor pinned. |

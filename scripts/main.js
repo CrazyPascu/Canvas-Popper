@@ -4,6 +4,7 @@ import { keepSidebarWindowOpen, registerDnd5eRollDialogs, registerSidebarDialogP
 import { registerToolbarWindows } from "./toolbar-windows.js";
 
 const MODULE_ID = "canvas-popper";
+const TOUCH_MODE_SETTING = "touchMode";
 const COMPACT_CHAT_SETTING = "showCompactChat";
 const CREATION_DIALOG_SETTING = "creationDialogPlacement";
 const DND5E_ROLL_DIALOG_SETTING = "showDnd5eRollDialogsInSidebar";
@@ -16,6 +17,19 @@ let detachedSidebar;
 let opening = false;
 
 Hooks.once("init", () => {
+  game.settings.register(MODULE_ID, TOUCH_MODE_SETTING, {
+    name: "Touch mode",
+    hint: "Make buttons and other interactive controls larger in Canvas Popper windows.",
+    scope: "user",
+    config: true,
+    type: Boolean,
+    default: false,
+    onChange(enabled) {
+      for (const [id, { window: popup }] of foundry.applications.detached.windows) {
+        if (id.startsWith("sidebar-window-") && !popup.closed) applyTouchMode(popup, enabled);
+      }
+    }
+  });
   game.settings.register(MODULE_ID, COMPACT_CHAT_SETTING, {
     name: "Show compact chat",
     hint: "Show compact chat in the main window when the sidebar is detached and its Chat tab is out of view.",
@@ -103,6 +117,14 @@ Hooks.on("changeSidebarTab", () => {
   detachedSidebar.pinning.refresh();
   detachedSidebar.chat.refresh();
 });
+
+Hooks.on("openDetachedWindow", (id, popup) => {
+  if (id.startsWith("sidebar-window-")) applyTouchMode(popup, game.settings.get(MODULE_ID, TOUCH_MODE_SETTING));
+});
+
+function applyTouchMode(popup, enabled) {
+  popup.document.documentElement.classList.toggle("canvas-popper-touch-mode", enabled);
+}
 
 Hooks.on("closeDetachedWindow", (_id, popup) => {
   if (detachedSidebar?.popup === popup) detachedSidebar.restore();
