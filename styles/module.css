@@ -87,6 +87,18 @@
   overflow: hidden;
 }
 
+body:has(> #sidebar.sidebar-window-detached) > .sidebar-window-creation-dialog {
+  min-width: 0;
+  min-height: 0;
+  max-width: 100dvw;
+  max-height: 100dvh;
+}
+
+body:has(> #sidebar.sidebar-window-detached) > .sidebar-window-creation-dialog > .window-content {
+  min-height: 0;
+  overflow: auto;
+}
+
 .sidebar-window-detached #sidebar-tabs {
   padding: 8px;
   flex-wrap: nowrap;

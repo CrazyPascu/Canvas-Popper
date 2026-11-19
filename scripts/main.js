@@ -1,8 +1,10 @@
+import { keepSidebarWindowOpen, registerSidebarCreationDialogs } from "./creation-dialogs.js";
 import { supportDetachedChat } from "./detached-chat.js";
 import { registerToolbarWindows } from "./toolbar-windows.js";
 
 const MODULE_ID = "canvas-popper";
 const COMPACT_CHAT_SETTING = "showCompactChat";
+const CREATION_DIALOG_SETTING = "creationDialogPlacement";
 const DETACH_LABEL = "Open sidebar in a separate window";
 const RETURN_LABEL = "Return sidebar to Foundry";
 const DETACH_ICON = "fa-arrow-up-right-from-square";
@@ -20,6 +22,18 @@ Hooks.once("init", () => {
     type: Boolean,
     default: false,
     onChange: () => detachedSidebar?.chat.setShowCompactChat(game.settings.get(MODULE_ID, COMPACT_CHAT_SETTING))
+  });
+  game.settings.register(MODULE_ID, CREATION_DIALOG_SETTING, {
+    name: "Creation dialog placement",
+    hint: "Choose where creation dialogs open when launched from the detached sidebar.",
+    scope: "user",
+    config: true,
+    type: String,
+    choices: {
+      normal: "Normal popups",
+      sidebar: "Window-constrained popups"
+    },
+    default: "sidebar"
   });
 });
 
@@ -98,6 +112,9 @@ function labelButton(button, label) {
 }
 
 registerToolbarWindows(MODULE_ID, { createButton, labelButton });
+registerSidebarCreationDialogs(() => {
+  if (detachedSidebar && game.settings.get(MODULE_ID, CREATION_DIALOG_SETTING) === "sidebar") return detachedSidebar.popup;
+});
 
 async function openSidebar(sidebar, toggle) {
   if (opening || detachedSidebar) return;
@@ -119,6 +136,8 @@ async function openSidebar(sidebar, toggle) {
       }
     });
     popup.document.title = "Sidebar Window";
+    await keepSidebarWindowOpen(popup);
+    if (popup.closed) return;
 
     // Foundry uses this element's width to position off-screen indicators in the main canvas.
     const canvasInset = document.createElement("span");
