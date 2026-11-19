@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out the tag
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Package the Foundry module
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = $env:GITHUB_REF_NAME
+          if ($tag -cnotmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+            throw "Expected a release tag in the form vX.Y.Z, got '$tag'."
+          }
+
+          $manifest = Get-Content -LiteralPath 'module.json' -Raw | ConvertFrom-Json
+          $version = $tag.Substring(1)
+          if ($manifest.version -cne $version) {
+            throw "Tag '$tag' does not match module.json version '$($manifest.version)'."
+          }
+
+          foreach ($asset in @($manifest.esmodules) + @($manifest.styles)) {
+            if (!(Test-Path -LiteralPath $asset -PathType Leaf)) {
+              throw "Missing file in module.json: $asset"
+            }
+          }
+
+          $releaseBase = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/releases"
+          $manifest.manifest = "$releaseBase/latest/download/module.json"
+          $manifest.download = "$releaseBase/download/$tag/module.zip"
+
+          $releaseDir = Join-Path $env:RUNNER_TEMP 'canvas-popper-release'
+          $packageDir = Join-Path $releaseDir 'package'
+          New-Item -ItemType Directory -Path $packageDir -Force | Out-Null
+
+          $manifestPath = Join-Path $releaseDir 'module.json'
+          $json = ($manifest | ConvertTo-Json -Depth 20) + [Environment]::NewLine
+          [IO.File]::WriteAllText($manifestPath, $json, [Text.UTF8Encoding]::new($false))
+
+          Copy-Item -LiteralPath 'README.md', 'scripts', 'styles', 'assets' -Destination $packageDir -Recurse
+          Copy-Item -LiteralPath $manifestPath -Destination $packageDir
+          Compress-Archive -Path (Join-Path $packageDir '*') -DestinationPath (Join-Path $releaseDir 'module.zip')
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME"
+          "$RUNNER_TEMP/canvas-popper-release/module.json"
+          "$RUNNER_TEMP/canvas-popper-release/module.zip"
+          --repo "$GITHUB_REPOSITORY"
+          --verify-tag
+          --title "$GITHUB_REF_NAME"
+          --notes "Automatic release"

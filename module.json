@@ -1,8 +1,7 @@
-
 {
   "id": "canvas-popper",
   "title": "Canvas Popper",
-  "description": "A module to display the elements displayed over the canvas in separate pop out windows.",
+  "description": "Detach the sidebar, Scene Controls, Hotbar, and Players widget into separate windows in Foundry VTT v14.",
   "version": "1.0.0",
   "authors": [
     {
@@ -11,6 +10,9 @@
       "url": "https://github.com/CrazyPascu"
     }
   ],
+  "manifest": "https://github.com/CrazyPascu/Canvas-Popper/releases/latest/download/module.json",
+  "download": "https://github.com/CrazyPascu/Canvas-Popper/releases/download/v1.0.0/module.zip",
+  "url": "https://github.com/CrazyPascu/Canvas-Popper",
   "compatibility": {
     "minimum": "14",
     "verified": "14"
@@ -20,5 +22,8 @@
   ],
   "styles": [
     "styles/module.css"
-  ]
+  ],
+  "readme": "README.md",
+  "bugs": "https://github.com/CrazyPascu/Canvas-Popper/issues",
+  "changelog": "https://github.com/CrazyPascu/Canvas-Popper/releases"
 }
