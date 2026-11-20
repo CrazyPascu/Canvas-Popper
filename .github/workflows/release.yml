@@ -58,11 +58,14 @@ jobs:
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release create "$GITHUB_REF_NAME"
-          "$RUNNER_TEMP/canvas-popper-release/module.json"
-          "$RUNNER_TEMP/canvas-popper-release/module.zip"
-          --repo "$GITHUB_REPOSITORY"
-          --verify-tag
-          --title "$GITHUB_REF_NAME"
-          --notes "Automatic release"
+        shell: bash
+        run: |
+          release_dir="$RUNNER_TEMP/canvas-popper-release"
+          git log -1 --format=%B HEAD > "$release_dir/notes.md"
+          gh release create "$GITHUB_REF_NAME" \
+            "$release_dir/module.json" \
+            "$release_dir/module.zip" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file "$release_dir/notes.md"
