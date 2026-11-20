@@ -23,7 +23,9 @@ Enable **Canvas Popper** in **Manage Modules** in your world.
 
 ## Opening and docking windows
 
-Click the popout icon on the widget you want to move. Close its popup or click its return icon to dock it in Foundry again. The windows can be opened independently.
+Click the popout icon on the widget you want to move. Close its popup or click its return icon to dock it in Foundry again. In **Combine popouts**, check the widgets you want to share a window. Checked widgets that are already popped out merge when you save. Unchecking a widget in the shared window docks it in Foundry, and its next popout opens separately. Use a widget's return icon to dock it, or close the shared window to dock every widget it contains.
+
+Click **Pop Out All** on the docked Hotbar to open the Sidebar and every enabled toolbar popout. The **Combine popouts** settings apply to these windows. Allow popups for your Foundry site if you want to open several separate windows from one click in a browser.
 
 | Widget | Popout button location | What you can do in the popup |
 | --- | --- | --- |
@@ -31,6 +33,16 @@ Click the popout icon on the widget you want to move. Close its popup or click i
 | Scene Controls | At the bottom of the layer buttons | Switch canvas layers, choose tools, and open palettes. The controls stay vertical and act on the main canvas. |
 | Hotbar | At the end of the hotbar | Run macros by clicking or using their number shortcuts, switch pages, and drag macros onto or between slots. The lock, mute, and slot context menus are also available. |
 | Players | Next to the latency and FPS indicators | View live player status, expand the inactive player list, and use player context menus. The widget sits at the bottom left when docked. |
+
+### Positioning widgets in the shared window
+
+Drag a grouped widget by its named handle. All five docks appear while dragging. Drop on **Left** or **Right** to add the widget below the existing ones. **Top**, **Center**, and **Bottom** add widgets to the right. Drag within a dock along its column or row to change the order. Canvas Popper saves the layout per user.
+
+A lone widget fills its dock by default. Drag the line along the bottom of a widget in Left or Right to change its height. Drag the line along the right edge of a widget in Top, Center, or Bottom to change its width. The line highlights on hover. Hold **Shift** to resize the next widget along with it.
+
+Focus a resize line to use the arrow keys. Right-click it or press **Delete** while it is focused to restore automatic sizing. Drag an occupied edge dock's border facing Center to resize the dock itself. Sizes are saved with your layout.
+
+With a handle focused, use the arrow keys along the dock to reorder. Hold **Alt** and press an arrow key to move to an edge, or **Alt+Home** to move to the center.
 
 ### Popout buttons
 
@@ -84,6 +96,7 @@ Open **Settings → Configure Settings → Canvas Popper**. Each setting is save
 
 | Setting | Default | What it does |
 | --- | --- | --- |
+| **Combine popouts** | None selected | Chooses which widgets share a popout window. |
 | **Touch mode** | Off | Enlarges buttons, tabs, macro slots, and other interactive controls in Canvas Popper?s detached windows. |
 | **Creation dialog placement** | Window-constrained popups | Chooses where creation dialogs launched from the detached sidebar open. |
 | **D&D 5e roll dialogs in sidebar** | Off | Opens roll configuration from the detached sidebar in D&D 5e worlds. |

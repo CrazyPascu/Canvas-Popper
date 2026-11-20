@@ -1,6 +1,7 @@
 import { registerSidebarCreationDialogs } from "./creation-dialogs.js";
 import { supportDetachedChat } from "./detached-chat.js";
-import { keepSidebarWindowOpen, registerDnd5eRollDialogs, registerSidebarDialogPlacement } from "./sidebar-dialogs.js";
+import { registerPopoutWorkspace } from "./popout-workspace.js";
+import { registerDnd5eRollDialogs, registerSidebarDialogPlacement } from "./sidebar-dialogs.js";
 import { registerToolbarWindows } from "./toolbar-windows.js";
 
 const MODULE_ID = "canvas-popper";
@@ -87,13 +88,8 @@ Hooks.on("renderSidebar", (sidebar, element) => {
   const button = createButton(DETACH_LABEL, DETACH_ICON);
   button.classList.add("sidebar-window-toggle");
   button.addEventListener("click", () => {
-    if (detachedSidebar) {
-      const { popup, restore } = detachedSidebar;
-      restore();
-      popup.close();
-    } else {
-      void openSidebar(sidebar, button);
-    }
+    if (detachedSidebar) popouts.dock("sidebar");
+    else void openSidebar(sidebar);
   });
   item.append(button);
   menu.append(item);
@@ -126,12 +122,6 @@ function applyTouchMode(popup, enabled) {
   popup.document.documentElement.classList.toggle("canvas-popper-touch-mode", enabled);
 }
 
-Hooks.on("closeDetachedWindow", (_id, popup) => {
-  if (detachedSidebar?.popup === popup) detachedSidebar.restore();
-});
-
-window.addEventListener("pagehide", () => detachedSidebar?.popup.close());
-
 function createButton(label, icon) {
   const button = document.createElement("button");
   button.type = "button";
@@ -145,7 +135,8 @@ function labelButton(button, label) {
   button.dataset.tooltip = label;
 }
 
-registerToolbarWindows(MODULE_ID, { createButton, labelButton });
+const popouts = registerPopoutWorkspace(MODULE_ID);
+registerToolbarWindows(MODULE_ID, { createButton, labelButton }, popouts, () => openSidebar(ui.sidebar));
 registerSidebarDialogPlacement(getSidebarDialogPopup);
 registerSidebarCreationDialogs(() => getSidebarDialogPopup("creation"));
 
@@ -157,69 +148,61 @@ function getSidebarDialogPopup(kind) {
   }
 }
 
-async function openSidebar(sidebar, toggle) {
+async function openSidebar(sidebar) {
   if (opening || detachedSidebar) return;
+  const toggle = sidebar?.element?.querySelector(".sidebar-window-toggle");
+  if (!toggle) return;
   opening = true;
   toggle.disabled = true;
 
-  let popup;
   try {
     const { element, expanded } = sidebar;
     const { right, top } = element.getBoundingClientRect();
     const width = 560;
-    popup = await foundry.applications.detached.openWindow({
-      id: `sidebar-window-${foundry.utils.randomID()}`,
-      position: {
-        left: window.screenX + right - width,
-        top: window.screenY + top,
-        width,
-        height: Math.min(840, window.screen.availHeight - 80)
+    const position = {
+      left: window.screenX + right - width,
+      top: window.screenY + top,
+      width,
+      height: Math.min(840, window.screen.availHeight - 80)
+    };
+    await popouts.open("sidebar", "Sidebar Window", position, popup => {
+      if (sidebar.element !== element || !element.isConnected) return;
+
+      // Foundry uses this element's width to position off-screen indicators in the main canvas.
+      const canvasInset = document.createElement("span");
+      canvasInset.id = "sidebar-content";
+      canvasInset.hidden = true;
+
+      const tabs = toggle.closest("nav");
+      const tooltipDirection = tabs.dataset.tooltipDirection;
+      const pinning = createSidebarPinning(sidebar, tabs, popup);
+      const chat = supportDetachedChat(popup, {
+        showCompactChat: game.settings.get(MODULE_ID, COMPACT_CHAT_SETTING),
+        isChatVisible: () => pinning.isTabVisible("chat")
+      });
+      function restore() {
+        detachedSidebar = undefined;
+        pinning.dispose();
+        canvasInset.replaceWith(element);
+        element.classList.remove("sidebar-window-detached");
+        element.removeEventListener("dragstart", markNoteDrag, true);
+        chat.restore(() => sidebar.toggleExpanded(expanded));
+        tabs.dataset.tooltipDirection = tooltipDirection;
+        toggle.classList.replace("fa-arrow-right-to-bracket", DETACH_ICON);
+        labelButton(toggle, DETACH_LABEL);
       }
+
+      detachedSidebar = { popup, pinning, chat };
+      element.before(canvasInset);
+      sidebar.expand();
+      element.classList.add("sidebar-window-detached");
+      element.addEventListener("dragstart", markNoteDrag, true);
+      tabs.dataset.tooltipDirection = "DOWN";
+      toggle.classList.replace(DETACH_ICON, "fa-arrow-right-to-bracket");
+      labelButton(toggle, RETURN_LABEL);
+      return { element, restore };
     });
-    popup.document.title = "Sidebar Window";
-    await keepSidebarWindowOpen(popup);
-    if (popup.closed) return;
-
-    // Foundry uses this element's width to position off-screen indicators in the main canvas.
-    const canvasInset = document.createElement("span");
-    canvasInset.id = "sidebar-content";
-    canvasInset.hidden = true;
-
-    const tabs = toggle.closest("nav");
-    const tooltipDirection = tabs.dataset.tooltipDirection;
-    const pinning = createSidebarPinning(sidebar, tabs, popup);
-    const chat = supportDetachedChat(popup, {
-      showCompactChat: game.settings.get(MODULE_ID, COMPACT_CHAT_SETTING),
-      isChatVisible: () => pinning.isTabVisible("chat")
-    });
-    function restore() {
-      if (detachedSidebar?.popup !== popup) return;
-      detachedSidebar = undefined;
-      popup.removeEventListener("pagehide", restore);
-      pinning.dispose();
-      canvasInset.replaceWith(element);
-      element.classList.remove("sidebar-window-detached");
-      element.removeEventListener("dragstart", markNoteDrag, true);
-      chat.restore(() => sidebar.toggleExpanded(expanded));
-      tabs.dataset.tooltipDirection = tooltipDirection;
-      toggle.classList.replace("fa-arrow-right-to-bracket", DETACH_ICON);
-      labelButton(toggle, DETACH_LABEL);
-    }
-
-    detachedSidebar = { popup, restore, pinning, chat };
-    popup.addEventListener("pagehide", restore, { once: true });
-    element.before(canvasInset);
-    sidebar.expand();
-    element.classList.add("sidebar-window-detached");
-    element.addEventListener("dragstart", markNoteDrag, true);
-    popup.document.body.append(element);
-    tabs.dataset.tooltipDirection = "DOWN";
-    toggle.classList.replace(DETACH_ICON, "fa-arrow-right-to-bracket");
-    labelButton(toggle, RETURN_LABEL);
-    popup.focus();
   } catch (error) {
-    detachedSidebar?.restore();
-    popup?.close();
     console.error("Sidebar Window | Could not open the sidebar window", error);
   } finally {
     opening = false;
@@ -505,7 +488,8 @@ function createSidebarPinning(sidebar, tabs, popup) {
   }
 
   menu.addEventListener("wheel", scrollTabs, { passive: false });
-  popup.addEventListener("resize", updateWidths);
+  const resizeObserver = new ResizeObserver(updateWidths);
+  resizeObserver.observe(element);
   return {
     get hasPins() { return Boolean(columns.size); },
     isTabVisible(tab) {
@@ -515,7 +499,7 @@ function createSidebarPinning(sidebar, tabs, popup) {
     refresh,
     dispose() {
       menu.removeEventListener("wheel", scrollTabs);
-      popup.removeEventListener("resize", updateWidths);
+      resizeObserver.disconnect();
       for (const tab of columns.keys()) removeColumn(tab);
       if (browsingTab) sidebar.changeTab(browsingTab, "primary");
       refresh();

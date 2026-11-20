@@ -1,8 +1,9 @@
 const OPEN_ICON = "fa-arrow-up-right-from-square";
 const RETURN_ICON = "fa-arrow-right-to-bracket";
 
-export function registerToolbarWindows(moduleId, buttons) {
-  registerToolbarWindow({
+export function registerToolbarWindows(moduleId, buttons, popouts, openSidebar) {
+  let openingAll = false;
+  const openControls = registerToolbarWindow({
     key: "controls",
     hook: "renderSceneControls",
     title: "Scene Controls",
@@ -16,7 +17,7 @@ export function registerToolbarWindows(moduleId, buttons) {
       element.querySelector(":scope > menu").append(item);
     },
     onRestore: app => app.setPosition({})
-  }, moduleId, buttons);
+  }, moduleId, buttons, popouts);
 
   Hooks.once("init", () => {
     const setting = "disableSceneControlTooltips";
@@ -48,7 +49,7 @@ export function registerToolbarWindows(moduleId, buttons) {
     });
   });
 
-  registerToolbarWindow({
+  const openHotbar = registerToolbarWindow({
     key: "hotbar",
     hook: "renderHotbar",
     title: "Hotbar",
@@ -56,14 +57,15 @@ export function registerToolbarWindows(moduleId, buttons) {
     width: 600,
     height: 110,
     insertButton: (element, button) => element.append(button),
+    syncOpenAllButton,
     onRestore(app) {
       app._onResize();
       // Foundry calculates the docked hotbar offset from the current compact chat layout.
       if (ui.chat?.rendered) ui.chat._toggleNotifications();
     }
-  }, moduleId, buttons);
+  }, moduleId, buttons, popouts);
 
-  registerToolbarWindow({
+  const openPlayers = registerToolbarWindow({
     key: "players",
     hook: "renderPlayers",
     title: "Players",
@@ -71,11 +73,41 @@ export function registerToolbarWindows(moduleId, buttons) {
     width: 250,
     height: 240,
     insertButton: (element, button) => element.querySelector("#performance-stats").append(button)
-  }, moduleId, buttons);
+  }, moduleId, buttons, popouts);
+
+  function syncOpenAllButton(element, detached, opening) {
+    let button = element.querySelector(".sidebar-window-open-all");
+    if (detached) {
+      button?.remove();
+      return;
+    }
+
+    if (!button) {
+      button = buttons.createButton("Pop Out All", "fa-window-restore");
+      button.classList.add("sidebar-window-open-all");
+      button.addEventListener("click", openAll);
+      element.insertBefore(button, element.querySelector(".sidebar-window-toolbar-toggle"));
+    }
+    button.disabled = opening || openingAll;
+  }
+
+  async function openAll(event) {
+    if (openingAll) return;
+    openingAll = true;
+    event.currentTarget.disabled = true;
+    try {
+      // Start each popup from the same user gesture.
+      await Promise.all([openSidebar(), openControls(), openPlayers(), openHotbar()]);
+    } finally {
+      openingAll = false;
+      const element = ui.hotbar?.element;
+      if (element?.ownerDocument === document) syncOpenAllButton(element, false, false);
+    }
+  }
 }
 
-function registerToolbarWindow(config, moduleId, { createButton, labelButton }) {
-  let detached;
+function registerToolbarWindow(config, moduleId, { createButton, labelButton }, popouts) {
+  let detached = false;
   let opening = false;
   const setting = `${config.key}Popout`;
   const openLabel = `Open ${config.title} in a separate window`;
@@ -86,12 +118,11 @@ function registerToolbarWindow(config, moduleId, { createButton, labelButton }) 
   }
 
   function dock() {
-    const { popup, restore } = detached;
-    restore();
-    popup.close();
+    popouts.dock(config.key);
   }
 
   function syncButton(app, element) {
+    config.syncOpenAllButton?.(element, detached, opening);
     let button = element.querySelector(".sidebar-window-toolbar-toggle");
     if (!isEnabled()) {
       (button?.closest(".sidebar-window-toolbar-toggle-item") ?? button)?.remove();
@@ -114,54 +145,43 @@ function registerToolbarWindow(config, moduleId, { createButton, labelButton }) 
   }
 
   async function open(app) {
-    if (opening || detached || !isEnabled()) return;
+    if (!app?.rendered || opening || detached || !isEnabled()) return;
     const { element } = app;
     opening = true;
     syncButton(app, element);
 
-    let popup;
     try {
       const { left, top } = element.getBoundingClientRect();
-      popup = await foundry.applications.detached.openWindow({
-        id: `sidebar-window-${config.key}-${foundry.utils.randomID()}`,
-        position: {
-          left: window.screenX + left,
-          top: window.screenY + top,
-          width: config.width,
-          height: config.height
+      const position = {
+        left: window.screenX + left,
+        top: window.screenY + top,
+        width: config.width,
+        height: config.height
+      };
+      await popouts.open(config.key, config.title, position, () => {
+        if (app.element !== element || !element.isConnected || !isEnabled()) return;
+
+        // Keep the dock location and satisfy core layout lookups while the live toolbar is away.
+        const anchor = document.createElement("span");
+        anchor.id = element.id;
+        anchor.className = "sidebar-window-toolbar-anchor";
+        anchor.hidden = true;
+
+        function restore() {
+          detached = false;
+          anchor.replaceWith(element);
+          element.classList.remove(config.className);
+          syncButton(app, element);
+          config.onRestore?.(app);
         }
+
+        detached = true;
+        element.before(anchor);
+        element.classList.add(config.className);
+        config.syncOpenAllButton?.(element, detached, opening);
+        return { element, restore };
       });
-      if (app.element !== element || !element.isConnected || !isEnabled()) {
-        popup.close();
-        return;
-      }
-      popup.document.title = config.title;
-
-      // Keep the dock location and satisfy core layout lookups while the live toolbar is away.
-      const anchor = document.createElement("span");
-      anchor.id = element.id;
-      anchor.className = "sidebar-window-toolbar-anchor";
-      anchor.hidden = true;
-
-      function restore() {
-        if (detached?.popup !== popup) return;
-        detached = undefined;
-        popup.removeEventListener("pagehide", restore);
-        anchor.replaceWith(element);
-        element.classList.remove(config.className);
-        syncButton(app, element);
-        config.onRestore?.(app);
-      }
-
-      detached = { popup, restore };
-      popup.addEventListener("pagehide", restore, { once: true });
-      element.before(anchor);
-      element.classList.add(config.className);
-      popup.document.body.append(element);
-      popup.focus();
     } catch (error) {
-      detached?.restore();
-      popup?.close();
       console.error(`Sidebar Window | Could not open ${config.title}`, error);
     } finally {
       opening = false;
@@ -188,8 +208,6 @@ function registerToolbarWindow(config, moduleId, { createButton, labelButton }) 
   Hooks.on(config.hook, (app, element) => {
     if (ui[config.key] === app) syncButton(app, element);
   });
-  Hooks.on("closeDetachedWindow", (_id, popup) => {
-    if (detached?.popup === popup) detached.restore();
-  });
-  window.addEventListener("pagehide", () => detached?.popup.close());
+
+  return () => open(ui[config.key]);
 }
