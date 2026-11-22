@@ -153,7 +153,7 @@ body:has(#sidebar.sidebar-window-detached) > .sidebar-window-dialog > .window-co
   display: flex;
   align-items: stretch;
   max-height: 100%;
-  overflow: auto;
+  overflow: clip;
 }
 
 .canvas-popper-workspace-region[data-axis="y"] {
@@ -228,10 +228,12 @@ body:has(#sidebar.sidebar-window-detached) > .sidebar-window-dialog > .window-co
   position: relative;
   box-sizing: border-box;
   display: flex;
-  flex: none;
+  flex: 0 1 auto;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   max-width: 100%;
+  overflow: clip;
 }
 
 .canvas-popper-workspace-widget[data-grabbed] {
@@ -239,7 +241,8 @@ body:has(#sidebar.sidebar-window-detached) > .sidebar-window-dialog > .window-co
 }
 
 .canvas-popper-workspace-widget[data-widget="sidebar"] {
-  flex: 1 0 min(300px, 55dvw);
+  flex-grow: 1;
+  width: min(300px, 55dvw);
   --workspace-sidebar-height: min(440px, 45dvh);
 }
 
@@ -248,7 +251,7 @@ body:has(#sidebar.sidebar-window-detached) > .sidebar-window-dialog > .window-co
 }
 
 .canvas-popper-workspace-region[data-axis="y"] > .canvas-popper-workspace-widget[data-widget="sidebar"] {
-  flex: none;
+  flex-grow: 0;
 }
 
 .canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) > .canvas-popper-workspace-widget[data-widget="sidebar"] {
@@ -267,25 +270,43 @@ body:has(#sidebar.sidebar-window-detached) > .sidebar-window-dialog > .window-co
   width: min(540px, 75dvw);
 }
 
-.canvas-popper-workspace-region[data-axis] > .canvas-popper-workspace-widget[data-sized]:is(:not(:only-child), [data-individual-size]) {
-  flex: 0 0 var(--workspace-widget-size);
+.canvas-popper-workspace-region[data-axis]:not([data-measuring]) > .canvas-popper-workspace-widget[data-sized]:is(:not(:only-child), [data-individual-size]) {
+  flex: 0 1 var(--workspace-widget-size);
 }
 
 .canvas-popper-workspace-region[data-axis="x"] > .canvas-popper-workspace-widget:only-child {
   align-self: stretch;
 }
 
-.canvas-popper-workspace-region[data-axis="x"] > .canvas-popper-workspace-widget:only-child:not([data-individual-size]) {
+.canvas-popper-workspace-region[data-axis="x"]:not([data-measuring]) > .canvas-popper-workspace-widget:only-child:not([data-individual-size]) {
   flex: 1 0 100%;
 }
 
-.canvas-popper-workspace-region[data-axis="y"] > .canvas-popper-workspace-widget:only-child:not([data-individual-size]) {
+.canvas-popper-workspace-region[data-axis="y"]:not([data-measuring]) > .canvas-popper-workspace-widget:only-child:not([data-individual-size]) {
   flex: 1 0 0;
   min-height: 0;
 }
 
 .canvas-popper-workspace-slot[data-sized] > .canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) > .canvas-popper-workspace-widget {
   height: 100%;
+}
+
+.canvas-popper-workspace-region[data-axis="x"]:not([data-measuring]) > .canvas-popper-workspace-widget {
+  min-width: var(--workspace-widget-min, 0px);
+}
+
+.canvas-popper-workspace-region[data-axis="y"]:not([data-measuring]) > .canvas-popper-workspace-widget {
+  min-height: var(--workspace-widget-min, 0px);
+}
+
+.canvas-popper-workspace-region[data-measuring] > .canvas-popper-workspace-widget,
+.canvas-popper-workspace-region[data-measuring] > .canvas-popper-workspace-widget > :is(#sidebar, #scene-controls, #players, #hotbar) {
+  flex: none;
+}
+
+.canvas-popper-workspace-widget > :is(#sidebar, #scene-controls, #players, #hotbar) {
+  flex-shrink: 1;
+  min-height: 0;
 }
 
 .canvas-popper-workspace-handle {
@@ -353,14 +374,14 @@ body:has(#sidebar.sidebar-window-detached) > .sidebar-window-dialog > .window-co
 
 .canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]):has(> [data-widget="players"]) {
   /* Keep one player row, the native panel padding and the widget padding visible. */
-  min-height: calc(var(--workspace-handle-height) + var(--canvas-popper-touch-size, 20px) + 30px + var(--workspace-line));
+  min-height: min(var(--workspace-dock-height-limit), calc(var(--workspace-handle-height) + var(--canvas-popper-touch-size, 20px) + 30px + var(--workspace-line)));
 }
 
-.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) > [data-widget="players"]:has(> #players[data-players-inline]) {
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]):not([data-measuring]) > [data-widget="players"]:has(> #players[data-players-inline]) {
   width: max-content;
 }
 
-.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) > [data-widget="players"]:has(> #players.expanded #players-inactive:not(:empty)) {
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]):not([data-measuring]) > [data-widget="players"]:has(> #players.expanded #players-inactive:not(:empty)) {
   width: min(640px, 75dvw);
 }
 
@@ -403,14 +424,30 @@ body:has(#sidebar.sidebar-window-detached) > .sidebar-window-dialog > .window-co
   scrollbar-width: none;
 }
 
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) #players.sidebar-window-players[data-players-inline] :is(#players-active, #players-active .players-list, #performance-stats) > * {
+  flex: none;
+}
+
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) #players.sidebar-window-players[data-players-inline] :is(#players-active, #players-active .players-list, #performance-stats) > :is(button, a, [role="button"]) {
+  position: static;
+  width: max-content;
+  margin: 0;
+}
+
 .canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) #players.sidebar-window-players[data-players-inline].expanded:has(#players-inactive:not(:empty)) #players-active {
   max-width: max(min(120px, 100%), calc(100% - var(--players-column-width) - 24px));
 }
 
 .canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) #players.sidebar-window-players[data-players-inline] #players-active > .players-list {
+  width: max-content;
   flex-direction: row;
   align-items: center;
   column-gap: 8px;
+}
+
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) #players.sidebar-window-players[data-players-inline] #performance-stats {
+  width: max-content;
+  white-space: nowrap;
 }
 
 .canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) #players.sidebar-window-players #players-inactive {
@@ -482,8 +519,8 @@ body:has(#sidebar.sidebar-window-detached) > .sidebar-window-dialog > .window-co
   pointer-events: none;
 }
 
-.canvas-popper-workspace-region[data-axis="y"] > .canvas-popper-workspace-widget:is([data-sized], :only-child) > :is(#sidebar, #scene-controls, #players, #hotbar),
-.canvas-popper-workspace-region[data-position="center"] > .canvas-popper-workspace-widget:only-child > :is(#sidebar, #scene-controls, #players, #hotbar),
+.canvas-popper-workspace-region[data-axis="y"]:not([data-measuring]) > .canvas-popper-workspace-widget:is([data-sized], :only-child) > :is(#sidebar, #scene-controls, #players, #hotbar),
+.canvas-popper-workspace-region[data-position="center"]:not([data-measuring]) > .canvas-popper-workspace-widget:only-child > :is(#sidebar, #scene-controls, #players, #hotbar),
 .canvas-popper-workspace-slot[data-sized] > .canvas-popper-workspace-region[data-axis="x"] > .canvas-popper-workspace-widget > :is(#sidebar, #scene-controls, #players, #hotbar) {
   flex: 1 1 0;
   min-height: 0;

@@ -46,6 +46,11 @@ export function createWorkspaceDocks(popup, order, defaults, onChange, initially
     regions.set(position, region);
   }
   document.body.append(layout);
+  const fitObserver = new ResizeObserver(entries => {
+    for (const { target } of entries) fitRegion(target);
+  });
+  for (const region of regions.values()) fitObserver.observe(region);
+  popup.addEventListener("pagehide", () => fitObserver.disconnect(), { once: true });
   setLocked(locked);
 
   function setLocked(value) {
@@ -55,6 +60,7 @@ export function createWorkspaceDocks(popup, order, defaults, onChange, initially
       setSplitterLocked(separator, value);
     }
     for (const { handle } of widgets.values()) handle.disabled = value;
+    for (const region of regions.values()) fitRegion(region);
   }
 
   function mount(key, label, element) {
@@ -91,10 +97,11 @@ export function createWorkspaceDocks(popup, order, defaults, onChange, initially
     moveNode(shell, element, splitter);
     applyWidgetSize(shell, order.sizes[position]?.[key]);
     widgets.set(key, { shell, handle });
+    fitRegion(region);
     installDockSplitter(popup, splitter, event => {
       if (locked || cancelInteraction) return;
-      if (event?.shiftKey && event.key !== "Delete" && shell.nextElementSibling) return resizeWidgets(shell);
-      return resizeWidget(shell);
+      const paired = Boolean(event?.shiftKey && event.key !== "Delete" && shell.nextElementSibling);
+      return resizeWidget(shell, paired);
     }, setInteraction);
     setSplitterLocked(splitter, locked);
     updateSplitterOrientation(shell);
@@ -104,8 +111,11 @@ export function createWorkspaceDocks(popup, order, defaults, onChange, initially
 
   function remove(key) {
     cancelInteraction?.();
-    widgets.get(key)?.shell.remove();
+    const shell = widgets.get(key)?.shell;
+    const region = shell?.parentElement;
+    shell?.remove();
     widgets.delete(key);
+    if (region) fitRegion(region);
   }
 
   function saveOrder(region) {
@@ -130,7 +140,8 @@ export function createWorkspaceDocks(popup, order, defaults, onChange, initially
     moveNode(destination, shell);
     applyWidgetSize(shell, order.sizes[destination.dataset.position]?.[key]);
     updateSplitterOrientation(shell);
-    shell.scrollIntoView({ block: "nearest", inline: "nearest" });
+    fitRegion(origin);
+    fitRegion(destination);
     onChange(order);
   }
 
@@ -155,74 +166,78 @@ export function createWorkspaceDocks(popup, order, defaults, onChange, initially
     else slot.style.setProperty("--workspace-dock-size", size + "px");
   }
 
-  function resizeWidget(shell) {
+  function fitRegion(region) {
+    const shells = [...region.children];
+    const vertical = region.dataset.axis === "y";
+    const dimension = vertical ? "height" : "width";
+    const budget = vertical ? region.clientHeight : region.clientWidth;
+    if (!budget || !shells.length) return;
+
+    // Measure the automatic sizes without any saved basis or the current fit limits.
+    region.dataset.measuring = "";
+    const minimums = shells.map(shell => Math.floor(shell.getBoundingClientRect()[dimension] / 2));
+    region.removeAttribute("data-measuring");
+    const totalMinimum = minimums.reduce((total, size) => total + size, 0);
+    // If the window itself shrinks past the minimums, keep every widget inside the dock.
+    const scale = totalMinimum > budget ? budget / totalMinimum : 1;
+    shells.forEach((shell, index) => {
+      const minimum = Math.floor(minimums[index] * scale) + "px";
+      if (shell.style.getPropertyValue("--workspace-widget-min") !== minimum) {
+        shell.style.setProperty("--workspace-widget-min", minimum);
+      }
+    });
+  }
+
+  function resizeWidget(shell, paired = false) {
     const region = shell.parentElement;
     const { axis, position } = region.dataset;
     const dimension = axis === "x" ? "width" : "height";
-    const clientSize = axis === "x" ? region.clientWidth : region.clientHeight;
-    const key = shell.dataset.widget;
+    fitRegion(region);
+    const budget = axis === "x" ? region.clientWidth : region.clientHeight;
     const sizes = order.sizes[position] ??= {};
-    const value = Math.round(shell.getBoundingClientRect()[dimension]);
-    // Keep the size of the Sidebar when it would normally fill the available row width.
-    const growing = [...region.children].find(widget => widget !== shell &&
-      Number(popup.getComputedStyle(widget).flexGrow) > 0);
-    const growingKey = growing?.dataset.widget;
-    const growingSize = growing && Math.round(growing.getBoundingClientRect()[dimension]);
+    const shells = [...region.children];
+    const index = shells.indexOf(shell);
+    const metrics = widget => ({
+      widget,
+      key: widget.dataset.widget,
+      size: widget.getBoundingClientRect()[dimension],
+      min: parseFloat(widget.style.getPropertyValue("--workspace-widget-min")) || 0
+    });
+    const current = metrics(shell);
+    const value = Math.round(current.size);
+    const neighbors = paired ? [metrics(shell.nextElementSibling)]
+      : [...shells.slice(index + 1), ...shells.slice(0, index).reverse()].map(metrics);
+    const occupied = neighbors.reduce((total, neighbor) => total + neighbor.size, current.size);
+    const minimum = neighbors.reduce((total, neighbor) => total + neighbor.min, 0);
+    const preference = (key, size) => sizes[key]?.size == null ? size : { size };
+
+    function resize(size, write) {
+      write(current, paired ? preference(current.key, size) : { size });
+      let excess = size - value - Math.max(0, budget - occupied);
+      for (const neighbor of neighbors) {
+        const change = paired ? size - value : Math.max(0, Math.min(excess, neighbor.size - neighbor.min));
+        excess -= change;
+        write(neighbor, preference(neighbor.key, neighbor.size - change));
+      }
+    }
+
     return {
       axis, value, direction: 1,
-      min: Math.min(axis === "x" ? 100 : 72, value),
-      max: Math.max(value, clientSize),
-      apply(size) {
-        if (growing) applyWidgetSize(growing, growingSize);
-        applyWidgetSize(shell, { size });
-      },
+      min: Math.min(current.min, value),
+      max: Math.max(value, Math.floor((paired ? occupied : budget) - minimum)),
+      apply: size => resize(size, (entry, next) => applyWidgetSize(entry.widget, next)),
       commit(size) {
-        if (growing) sizes[growingKey] = growingSize;
-        sizes[key] = { size };
+        resize(size, (entry, next) => { sizes[entry.key] = next; });
         onChange(order);
       },
       restore() {
-        if (growing) applyWidgetSize(growing, sizes[growingKey]);
-        applyWidgetSize(shell, sizes[key]);
+        for (const { widget, key } of [current, ...neighbors]) applyWidgetSize(widget, sizes[key]);
       },
       reset() {
-        if (sizes[key] == null) return;
-        delete sizes[key];
+        if (sizes[current.key] == null) return;
+        delete sizes[current.key];
         applyWidgetSize(shell);
         onChange(order);
-      }
-    };
-  }
-
-  function resizeWidgets(shell) {
-    const next = shell.nextElementSibling;
-    if (!next) return;
-    const { axis, position } = shell.parentElement.dataset;
-    const dimension = axis === "x" ? "width" : "height";
-    const preferredMin = axis === "x" ? 100 : 72;
-    const value = Math.round(shell.getBoundingClientRect()[dimension]);
-    const nextSize = Math.round(next.getBoundingClientRect()[dimension]);
-    const total = value + nextSize;
-    const firstKey = shell.dataset.widget;
-    const nextKey = next.dataset.widget;
-    const sizes = order.sizes[position] ??= {};
-    const asPreference = (key, size) => sizes[key]?.size == null ? size : { size };
-    return {
-      axis, value, direction: 1,
-      min: Math.min(preferredMin, value),
-      max: total - Math.min(preferredMin, nextSize),
-      apply(size) {
-        applyWidgetSize(shell, asPreference(firstKey, size));
-        applyWidgetSize(next, asPreference(nextKey, total - size));
-      },
-      commit(size) {
-        sizes[firstKey] = asPreference(firstKey, size);
-        sizes[nextKey] = asPreference(nextKey, total - size);
-        onChange(order);
-      },
-      restore() {
-        applyWidgetSize(shell, sizes[firstKey]);
-        applyWidgetSize(next, sizes[nextKey]);
       }
     };
   }
@@ -281,14 +296,12 @@ export function createWorkspaceDocks(popup, order, defaults, onChange, initially
     const initialNext = shell.nextElementSibling;
     const vertical = origin.dataset.axis === "y";
     const axis = vertical ? "clientY" : "clientX";
-    const scrollAxis = vertical ? "scrollTop" : "scrollLeft";
     const listeners = new AbortController();
     const options = { signal: listeners.signal };
     let pointer = event;
-    let previousCoordinate = pointer[axis] + origin[scrollAxis];
+    let previousCoordinate = pointer[axis];
     let target;
     let badge;
-    let frame;
 
     function preview() {
       const { clientX, clientY } = pointer;
@@ -300,7 +313,7 @@ export function createWorkspaceDocks(popup, order, defaults, onChange, initially
         target?.setAttribute("data-target", "");
       }
 
-      const coordinate = pointer[axis] + origin[scrollAxis];
+      const coordinate = pointer[axis];
       const forward = coordinate > previousCoordinate;
       const moved = coordinate !== previousCoordinate;
       previousCoordinate = coordinate;
@@ -318,19 +331,6 @@ export function createWorkspaceDocks(popup, order, defaults, onChange, initially
       moveNode(origin, shell, before);
     }
 
-    function scrollAtEdge() {
-      if (target === origin) {
-        const { top, right, bottom, left } = origin.getBoundingClientRect();
-        const leading = pointer[axis] - (vertical ? top : left);
-        const trailing = (vertical ? bottom : right) - pointer[axis];
-        const previousScroll = origin[scrollAxis];
-        if (leading < 28) origin[scrollAxis] -= Math.min(12, 28 - leading);
-        if (trailing < 28) origin[scrollAxis] += Math.min(12, 28 - trailing);
-        if (origin[scrollAxis] !== previousScroll) preview();
-      }
-      frame = popup.requestAnimationFrame(scrollAtEdge);
-    }
-
     function move(nextPointer) {
       if (nextPointer.pointerId !== pointerId) return;
       pointer = nextPointer;
@@ -343,7 +343,6 @@ export function createWorkspaceDocks(popup, order, defaults, onChange, initially
         badge.setAttribute("aria-hidden", "true");
         badge.textContent = label;
         layout.append(badge);
-        frame = popup.requestAnimationFrame(scrollAtEdge);
       }
       preview();
     }
@@ -352,7 +351,6 @@ export function createWorkspaceDocks(popup, order, defaults, onChange, initially
       cancelInteraction = undefined;
       listeners.abort();
       if (layout.hasPointerCapture(pointerId)) layout.releasePointerCapture(pointerId);
-      if (frame) popup.cancelAnimationFrame(frame);
       target?.removeAttribute("data-target");
       layout.removeAttribute("data-dragging");
       shell.removeAttribute("data-grabbed");
@@ -408,6 +406,7 @@ export function createWorkspaceDocks(popup, order, defaults, onChange, initially
         before = shell;
       }
     }
+    for (const region of regions.values()) fitRegion(region);
   }
 
   return { mount, remove, setLocked, applyLayout };

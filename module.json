@@ -2,7 +2,7 @@
   "id": "canvas-popper",
   "title": "Canvas Popper",
   "description": "Detach the sidebar, Scene Controls, Hotbar, and Players widget into separate windows in Foundry VTT v14.",
-  "version": "1.6.0",
+  "version": "1.6.5",
   "authors": [
     {
       "discord": "CrazyPascu",

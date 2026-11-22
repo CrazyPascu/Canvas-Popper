@@ -34,14 +34,20 @@ function scrollPlayers(event) {
 function watchPlayersLayout(element) {
   const stopListening = listenForWheel(element, scrollPlayers);
   const resizeObserver = new ResizeObserver(update);
-  const contentObserver = new MutationObserver(observeContent);
+  const contentObserver = new MutationObserver(records => {
+    if (records.some(({ target }) => target === element || target.matches?.("#players-active, .players-list, #performance-stats"))) {
+      observeContent();
+    }
+  });
   const dockObserver = new MutationObserver(update);
   let observedParent;
 
   function observeContent() {
     resizeObserver.disconnect();
     resizeObserver.observe(element);
-    for (const row of element.querySelectorAll("#players-active .player, #performance-stats")) resizeObserver.observe(row);
+    for (const part of element.querySelectorAll("#players-active > *, #players-active .players-list > *, #performance-stats > *")) {
+      resizeObserver.observe(part);
+    }
     update();
   }
 
@@ -70,19 +76,24 @@ function watchPlayersLayout(element) {
       : parseFloat(style.maxHeight) || Infinity;
 
     // Horizontal rows keep the same item heights and row gaps as the stacked panel.
-    const rows = [...list.children];
+    const rows = [...list.children].filter(row => row.getClientRects().length);
     const gaps = blockSize(view.getComputedStyle(list), "rowGap") * Math.max(0, rows.length - 1);
     const listHeight = rows.reduce((height, row) => height + row.getBoundingClientRect().height +
       blockSize(view.getComputedStyle(row), "marginTop", "marginBottom"), gaps);
     const panelStyle = view.getComputedStyle(active);
     const panelPadding = parseFloat(panelStyle.getPropertyValue("--players-panel-padding")) || 0;
+    const visible = [...active.children].filter(part => part.getClientRects().length);
+    const stackHeight = visible.reduce((height, part) => height +
+      (part === list ? listHeight : part.getBoundingClientRect().height) +
+      blockSize(view.getComputedStyle(part), "marginTop", "marginBottom"), 0);
     const frameHeight = blockSize(style, "paddingTop", "paddingBottom") + panelPadding * 2 +
-      blockSize(panelStyle, "borderTopWidth", "borderBottomWidth", "rowGap");
-    const required = listHeight + stats.getBoundingClientRect().height + frameHeight;
+      blockSize(panelStyle, "borderTopWidth", "borderBottomWidth") +
+      blockSize(panelStyle, "rowGap") * Math.max(0, visible.length - 1);
+    const required = stackHeight + frameHeight;
     element.toggleAttribute("data-players-inline", available + 0.5 < required);
   }
 
-  contentObserver.observe(element, { childList: true });
+  contentObserver.observe(element, { childList: true, subtree: true });
   observeContent();
   return () => {
     stopListening();

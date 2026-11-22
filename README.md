@@ -38,7 +38,7 @@ Click **Pop Out All** on the docked Hotbar to open the Sidebar and every enabled
 
 Drag a grouped widget by its named handle. All five docks appear while dragging. Drop on **Left** or **Right** to add the widget below the existing ones. **Top**, **Center**, and **Bottom** add widgets to the right. Drag within a dock along its column or row to change the order. Canvas Popper saves the layout per user.
 
-A lone widget fills its dock by default. Drag the line along the bottom of a widget in Left or Right to change its height. Drag the line along the right edge of a widget in Top, Center, or Bottom to change its width. The line highlights on hover. Hold **Shift** to resize the next widget along with it.
+A lone widget fills its dock by default. Drag the line along the bottom of a widget in Left or Right to change its height. Drag the line along the right edge of a widget in Top, Center, or Bottom to change its width. The line highlights on hover. Widgets use any free space first, then shrink their neighbors down to half their default size. Hold **Shift** to resize the next widget along with it.
 
 Focus a resize line to use the arrow keys. Right-click it or press **Delete** while it is focused to restore automatic sizing. Drag an occupied edge dock's border facing Center to resize the dock itself. Sizes are saved with your layout.
 
