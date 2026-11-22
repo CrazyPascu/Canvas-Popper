@@ -1,5 +1,6 @@
 import { registerSidebarCreationDialogs } from "./creation-dialogs.js";
 import { supportDetachedChat } from "./detached-chat.js";
+import { registerDetachedJournalLayout } from "./journal-popouts.js";
 import { registerNamedLayouts } from "./named-layouts.js";
 import { registerPopoutWorkspace } from "./popout-workspace.js";
 import { registerDnd5eRollDialogs, registerSidebarDialogPlacement } from "./sidebar-dialogs.js";
@@ -180,6 +181,7 @@ const attachLayoutActions = registerNamedLayouts(MODULE_ID, {
 });
 registerToolbarWindows(MODULE_ID, { createButton, labelButton }, popouts, () => openSidebar(ui.sidebar));
 registerSidebarDialogPlacement(getSidebarDialogPopup);
+registerDetachedJournalLayout();
 registerSidebarCreationDialogs(() => getSidebarDialogPopup("creation"));
 
 function getSidebarDialogPopup(kind) {
