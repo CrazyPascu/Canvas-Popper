@@ -1,7 +1,7 @@
 import { createWorkspaceDocks, workspacePositions } from "./workspace-docks.js";
 import { keepSidebarWindowOpen } from "./sidebar-dialogs.js";
 
-export function registerPopoutWorkspace(moduleId) {
+export function registerPopoutWorkspace(moduleId, isLayoutLocked) {
   const setting = "combinedPopoutWidgets";
   const legacySetting = "combinePopouts";
   const choices = {
@@ -74,25 +74,23 @@ export function registerPopoutWorkspace(moduleId) {
     return game.settings.get(moduleId, setting);
   }
 
-  function getDockOrder() {
-    if (dockOrder) return dockOrder;
-    const saved = game.settings.get(moduleId, dockSetting) ?? {};
+  function normalizeDockOrder(saved) {
     const placed = new Set();
-    dockOrder = Object.fromEntries(workspacePositions.map(position => [position, []]));
+    const order = Object.fromEntries(workspacePositions.map(position => [position, []]));
     for (const position of workspacePositions) {
       if (!Array.isArray(saved[position])) continue;
       for (const key of saved[position]) {
         if (!Object.hasOwn(choices, key) || placed.has(key)) continue;
-        dockOrder[position].push(key);
+        order[position].push(key);
         placed.add(key);
       }
     }
 
-    dockOrder.sizes = {};
+    order.sizes = {};
     for (const position of workspacePositions) {
       const previous = saved.sizes?.[position];
       if (!previous) continue;
-      const sizes = dockOrder.sizes[position] = {};
+      const sizes = order.sizes[position] = {};
       for (const key of ["dock", ...Object.keys(choices)]) {
         const preference = previous[key];
         if (Number.isFinite(preference) && preference > 0) sizes[key] = preference;
@@ -101,6 +99,14 @@ export function registerPopoutWorkspace(moduleId) {
         }
       }
     }
+
+    return order;
+  }
+
+  function getDockOrder() {
+    if (dockOrder) return dockOrder;
+    const saved = game.settings.get(moduleId, dockSetting) ?? {};
+    dockOrder = normalizeDockOrder(saved);
 
     // Import positions saved by the previous dropdowns before any widgets are mounted.
     if (!Object.keys(saved).length) {
@@ -171,7 +177,7 @@ export function registerPopoutWorkspace(moduleId) {
   function prepareWorkspace(host) {
     if (host.docks) return;
     const { popup } = host;
-    host.docks = createWorkspaceDocks(popup, getDockOrder(), defaults, saveDockOrder);
+    host.docks = createWorkspaceDocks(popup, getDockOrder(), defaults, saveDockOrder, isLayoutLocked());
     popup.document.title = "Canvas Popper";
 
     const { width, height } = workspaceSize();
@@ -261,5 +267,29 @@ export function registerPopoutWorkspace(moduleId) {
     }
   }
 
-  return { open, dock };
+  function setLocked(locked) {
+    for (const { popup, docks } of windows.values()) {
+      if (!popup.closed) docks?.setLocked(locked);
+    }
+  }
+
+  function snapshotLayout() {
+    return structuredClone(getDockOrder());
+  }
+
+  function applyLayout(saved) {
+    const next = normalizeDockOrder(saved);
+    const placed = new Set(workspacePositions.flatMap(position => next[position]));
+    for (const key of Object.keys(choices)) {
+      if (!placed.has(key)) next[defaults[key]].push(key);
+    }
+    const order = getDockOrder();
+    Object.assign(order, next);
+    for (const { popup, docks } of windows.values()) {
+      if (!popup.closed) docks?.applyLayout();
+    }
+    saveDockOrder(order);
+  }
+
+  return { open, dock, setLocked, snapshotLayout, applyLayout };
 }

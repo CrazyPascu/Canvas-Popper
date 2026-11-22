@@ -131,6 +131,10 @@ body:has(#sidebar.sidebar-window-detached) > .sidebar-window-dialog > .window-co
   --workspace-grip: 18px;
 }
 
+.canvas-popper-workspace:has(.canvas-popper-workspace-handle:disabled) {
+  --workspace-handle-height: 0px;
+}
+
 .canvas-popper-workspace-slot {
   position: relative;
   min-width: 0;
@@ -166,10 +170,6 @@ body:has(#sidebar.sidebar-window-detached) > .sidebar-window-dialog > .window-co
 
 .canvas-popper-workspace-region[data-axis="y"]:has(> [data-widget="sidebar"]) {
   --workspace-column-width: calc(360px + var(--workspace-line));
-}
-
-.canvas-popper-workspace-region[data-axis="y"]:has(> [data-widget="hotbar"]) {
-  --workspace-column-width: calc(540px + var(--workspace-line));
 }
 
 .canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) {
@@ -309,6 +309,10 @@ body:has(#sidebar.sidebar-window-detached) > .sidebar-window-dialog > .window-co
   user-select: none;
 }
 
+.canvas-popper-workspace-handle:disabled {
+  display: none;
+}
+
 .canvas-popper-workspace-drag-label {
   position: fixed;
   z-index: 1000;
@@ -333,12 +337,149 @@ body:has(#sidebar.sidebar-window-detached) > .sidebar-window-dialog > .window-co
   max-height: min(52dvh, 440px, var(--workspace-strip-content-height, 100dvh));
 }
 
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) > .canvas-popper-workspace-widget > #scene-controls.sidebar-window-scene-controls {
+  flex-direction: column;
+}
+
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) #scene-controls.sidebar-window-scene-controls > menu {
+  width: max-content;
+  flex-direction: row;
+  flex-wrap: nowrap;
+}
+
 .canvas-popper-workspace-widget > #players.sidebar-window-players {
   max-height: min(42dvh, 280px, var(--workspace-strip-content-height, 100dvh));
 }
 
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]):has(> [data-widget="players"]) {
+  /* Keep one player row, the native panel padding and the widget padding visible. */
+  min-height: calc(var(--workspace-handle-height) + var(--canvas-popper-touch-size, 20px) + 30px + var(--workspace-line));
+}
+
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) > [data-widget="players"]:has(> #players[data-players-inline]) {
+  width: max-content;
+}
+
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) > [data-widget="players"]:has(> #players.expanded #players-inactive:not(:empty)) {
+  width: min(640px, 75dvw);
+}
+
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) #players.sidebar-window-players {
+  --players-column-width: 144px;
+  --players-panel-padding: 6px;
+  flex: 1 1 auto;
+  flex-direction: row;
+  min-height: 0;
+}
+
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) #players.sidebar-window-players #players-active {
+  order: -1;
+  width: min(200px, 100%);
+  padding-block: var(--players-panel-padding);
+  overflow: auto;
+}
+
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) #players.sidebar-window-players #players-active :is(.players-list, .player) {
+  margin-block: 0;
+}
+
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) #players.sidebar-window-players #performance-stats {
+  flex-wrap: nowrap;
+}
+
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) #players.sidebar-window-players[data-players-inline] {
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) #players.sidebar-window-players[data-players-inline] #players-active {
+  width: max-content;
+  max-width: 100%;
+  flex-direction: row;
+  align-items: center;
+  column-gap: 8px;
+  padding-block: 0;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) #players.sidebar-window-players[data-players-inline].expanded:has(#players-inactive:not(:empty)) #players-active {
+  max-width: max(min(120px, 100%), calc(100% - var(--players-column-width) - 24px));
+}
+
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) #players.sidebar-window-players[data-players-inline] #players-active > .players-list {
+  flex-direction: row;
+  align-items: center;
+  column-gap: 8px;
+}
+
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) #players.sidebar-window-players #players-inactive {
+  display: none;
+}
+
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) #players.sidebar-window-players.expanded #players-inactive:not(:empty) {
+  display: flex;
+  flex: 1 0 min(calc(var(--players-column-width) + 16px), 100%);
+  flex-flow: column wrap;
+  align-content: flex-start;
+  width: auto;
+  max-height: none;
+  margin: 0;
+  gap: 4px 8px;
+  contain: size;
+  overflow: auto;
+  scrollbar-width: none;
+}
+
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) #players.sidebar-window-players #players-inactive > .player {
+  width: min(var(--players-column-width), 100%);
+  margin: 0;
+}
+
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) #players.sidebar-window-players #players-expand {
+  transform: rotate(90deg);
+}
+
+.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"]) #players.sidebar-window-players.expanded #players-expand {
+  transform: rotate(-90deg);
+}
+
 .canvas-popper-workspace-widget > #hotbar.sidebar-window-hotbar {
   max-height: min(42dvh, var(--workspace-strip-content-height, 100dvh));
+}
+
+.canvas-popper-workspace-region[data-axis="y"] #hotbar.sidebar-window-hotbar {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: safe center;
+}
+
+.canvas-popper-workspace-region[data-axis="y"] #hotbar.sidebar-window-hotbar #action-bar {
+  flex: none;
+  flex-direction: column;
+  flex-wrap: nowrap;
+}
+
+.canvas-popper-workspace-region[data-axis="y"] #hotbar.sidebar-window-hotbar .hotbar-controls {
+  height: auto;
+}
+
+.canvas-popper-workspace-region[data-axis="y"] #hotbar.sidebar-window-hotbar #hotbar-controls-left {
+  flex-direction: row;
+}
+
+.canvas-popper-workspace-region[data-axis="y"] #hotbar.sidebar-window-hotbar #hotbar-controls-right > * {
+  flex: none;
+}
+
+.canvas-popper-workspace-region[data-axis="y"] #hotbar.sidebar-window-hotbar #hotbar-page-controls {
+  align-items: center;
+}
+
+.canvas-popper-workspace-region[data-axis="y"] #hotbar.sidebar-window-hotbar #hotbar-page-controls .hotbar-page-number {
+  position: static;
+  margin: 0;
+  pointer-events: none;
 }
 
 .canvas-popper-workspace-region[data-axis="y"] > .canvas-popper-workspace-widget:is([data-sized], :only-child) > :is(#sidebar, #scene-controls, #players, #hotbar),
@@ -454,6 +595,17 @@ body:has(#sidebar.sidebar-window-detached) > .sidebar-window-dialog > .window-co
   scrollbar-width: none;
 }
 
+.sidebar-window-detached #sidebar-tabs .sidebar-window-layout-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.sidebar-window-detached #sidebar-tabs .sidebar-window-layout-actions > button {
+  --control-size: 26px;
+}
+
 .sidebar-window-detached #sidebar-tabs > .sidebar-window-pin {
   flex: none;
 }
@@ -493,7 +645,7 @@ body:has(#sidebar.sidebar-window-detached) > .sidebar-window-dialog > .window-co
   background: #373737;
 }
 
-.sidebar-window-split:has(> :where(.sidebar-window-pinned-header ~ .sidebar-window-pinned-header)) > .sidebar-window-pinned-header {
+.sidebar-window-split:not(.sidebar-window-layout-locked):has(> :where(.sidebar-window-pinned-header ~ .sidebar-window-pinned-header)) > .sidebar-window-pinned-header {
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -568,6 +720,14 @@ body:has(#sidebar.sidebar-window-detached) > .sidebar-window-dialog > .window-co
   z-index: 1;
   cursor: col-resize;
   touch-action: none;
+}
+
+:is(.sidebar-window-divider, .canvas-popper-workspace-edge, .canvas-popper-workspace-splitter)[aria-disabled="true"] {
+  pointer-events: none;
+}
+
+.sidebar-window-divider[aria-disabled="true"]::after {
+  display: none;
 }
 
 .sidebar-window-divider::before {

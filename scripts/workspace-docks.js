@@ -1,4 +1,4 @@
-import { installDockSplitter } from "./workspace-dock-splitter.js";
+import { installDockSplitter, setSplitterLocked } from "./workspace-dock-splitter.js";
 
 export const workspacePositions = ["top", "left", "center", "right", "bottom"];
 
@@ -9,16 +9,17 @@ function moveNode(parent, node, before = null) {
   } else parent.insertBefore(node, before);
 }
 
-export function createWorkspaceDocks(popup, order, defaults, onChange) {
+export function createWorkspaceDocks(popup, order, defaults, onChange, initiallyLocked) {
   const { document } = popup;
   const layout = document.createElement("div");
   layout.className = "canvas-popper-workspace";
+  let locked = initiallyLocked;
   const regions = new Map();
   const widgets = new Map();
   let cancelInteraction;
 
   function setInteraction(cancel) {
-    if (cancel && cancelInteraction) return false;
+    if (cancel && (locked || cancelInteraction)) return false;
     cancelInteraction = cancel;
     return true;
   }
@@ -39,12 +40,22 @@ export function createWorkspaceDocks(popup, order, defaults, onChange) {
       edge.setAttribute("aria-label", "Resize " + region.dataset.label + " dock");
       slot.append(edge);
       applyDockSize(region, order.sizes[position]?.dock);
-      installDockSplitter(popup, edge, () => cancelInteraction ? null : resizeDock(region), setInteraction);
+      installDockSplitter(popup, edge, () => locked || cancelInteraction ? null : resizeDock(region), setInteraction);
     }
     layout.append(slot);
     regions.set(position, region);
   }
   document.body.append(layout);
+  setLocked(locked);
+
+  function setLocked(value) {
+    if (value) cancelInteraction?.();
+    locked = value;
+    for (const separator of layout.querySelectorAll(".canvas-popper-workspace-edge, .canvas-popper-workspace-splitter")) {
+      setSplitterLocked(separator, value);
+    }
+    for (const { handle } of widgets.values()) handle.disabled = value;
+  }
 
   function mount(key, label, element) {
     if (widgets.has(key)) return;
@@ -61,6 +72,7 @@ export function createWorkspaceDocks(popup, order, defaults, onChange) {
 
     const handle = document.createElement("button");
     handle.type = "button";
+    handle.disabled = locked;
     handle.className = "canvas-popper-workspace-handle";
     handle.title = "Drag to move " + label + ". Use the arrow keys to reorder, or Alt+Arrow / Alt+Home to change docks.";
     handle.setAttribute("aria-label", "Move " + label);
@@ -78,12 +90,13 @@ export function createWorkspaceDocks(popup, order, defaults, onChange) {
     moveNode(region, shell, widgets.get(nextKey)?.shell);
     moveNode(shell, element, splitter);
     applyWidgetSize(shell, order.sizes[position]?.[key]);
-    widgets.set(key, { shell });
+    widgets.set(key, { shell, handle });
     installDockSplitter(popup, splitter, event => {
-      if (cancelInteraction) return;
+      if (locked || cancelInteraction) return;
       if (event?.shiftKey && event.key !== "Delete" && shell.nextElementSibling) return resizeWidgets(shell);
       return resizeWidget(shell);
     }, setInteraction);
+    setSplitterLocked(splitter, locked);
     updateSplitterOrientation(shell);
     handle.addEventListener("pointerdown", event => startDrag(event, shell, label));
     handle.addEventListener("keydown", event => moveWithKeyboard(event, shell, handle));
@@ -238,7 +251,7 @@ export function createWorkspaceDocks(popup, order, defaults, onChange) {
   }
 
   function moveWithKeyboard(event, shell, handle) {
-    if (cancelInteraction) return;
+    if (locked || cancelInteraction) return;
     const { key, altKey } = event;
     if (altKey) {
       const position = { ArrowUp: "top", ArrowRight: "right", ArrowDown: "bottom", ArrowLeft: "left", Home: "center" }[key];
@@ -260,7 +273,7 @@ export function createWorkspaceDocks(popup, order, defaults, onChange) {
   }
 
   function startDrag(event, shell, label) {
-    if (cancelInteraction || event.button !== 0 || !event.isPrimary) return;
+    if (locked || cancelInteraction || event.button !== 0 || !event.isPrimary) return;
     event.preventDefault();
     event.currentTarget.focus({ preventScroll: true });
     const { clientX: startX, clientY: startY, pointerId } = event;
@@ -379,6 +392,24 @@ export function createWorkspaceDocks(popup, order, defaults, onChange) {
     }, options);
   }
 
-  return { mount, remove };
+  function applyLayout() {
+    cancelInteraction?.();
+    for (const [position, region] of regions) {
+      const sizes = order.sizes[position];
+      applyDockSize(region, sizes?.dock);
+      let before = null;
+      // Walk backwards so each existing widget can stay in place when already in order.
+      for (const key of order[position].slice().reverse()) {
+        const shell = widgets.get(key)?.shell;
+        if (!shell) continue;
+        moveNode(region, shell, before);
+        applyWidgetSize(shell, sizes?.[key]);
+        updateSplitterOrientation(shell);
+        before = shell;
+      }
+    }
+  }
+
+  return { mount, remove, setLocked, applyLayout };
 }
 

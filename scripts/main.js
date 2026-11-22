@@ -1,11 +1,15 @@
 import { registerSidebarCreationDialogs } from "./creation-dialogs.js";
 import { supportDetachedChat } from "./detached-chat.js";
+import { registerNamedLayouts } from "./named-layouts.js";
 import { registerPopoutWorkspace } from "./popout-workspace.js";
 import { registerDnd5eRollDialogs, registerSidebarDialogPlacement } from "./sidebar-dialogs.js";
-import { registerToolbarWindows } from "./toolbar-windows.js";
+import { registerToolbarWindows, scrollWheelHorizontally } from "./toolbar-windows.js";
+import { installDockSplitter, setSplitterLocked } from "./workspace-dock-splitter.js";
 
 const MODULE_ID = "canvas-popper";
 const TOUCH_MODE_SETTING = "touchMode";
+const SIDEBAR_PINS_SETTING = "sidebarPins";
+const LOCK_LAYOUT_SETTING = "lockLayout";
 const COMPACT_CHAT_SETTING = "showCompactChat";
 const CREATION_DIALOG_SETTING = "creationDialogPlacement";
 const DND5E_ROLL_DIALOG_SETTING = "showDnd5eRollDialogsInSidebar";
@@ -16,8 +20,29 @@ const NOTE_DRAG_TYPE = "application/x-sidebar-window-note";
 
 let detachedSidebar;
 let opening = false;
+let savedSidebarPins;
+let pinSaveQueue = Promise.resolve();
 
 Hooks.once("init", () => {
+  game.settings.register(MODULE_ID, SIDEBAR_PINS_SETTING, {
+    scope: "user",
+    config: false,
+    type: Array,
+    default: []
+  });
+  game.settings.register(MODULE_ID, LOCK_LAYOUT_SETTING, {
+    name: "Lock layout",
+    hint: "Lock widget and sidebar column positions and sizes in Canvas Popper windows.",
+    scope: "user",
+    config: true,
+    type: Boolean,
+    default: false,
+    onChange(locked) {
+      popouts.setLocked(locked);
+      detachedSidebar?.pinning.setLocked(locked);
+      detachedSidebar?.layoutActions.refresh();
+    }
+  });
   game.settings.register(MODULE_ID, TOUCH_MODE_SETTING, {
     name: "Touch mode",
     hint: "Make buttons and other interactive controls larger in Canvas Popper windows.",
@@ -135,13 +160,31 @@ function labelButton(button, label) {
   button.dataset.tooltip = label;
 }
 
-const popouts = registerPopoutWorkspace(MODULE_ID);
+function isLayoutLocked() {
+  return game.settings.get(MODULE_ID, LOCK_LAYOUT_SETTING);
+}
+
+const popouts = registerPopoutWorkspace(MODULE_ID, isLayoutLocked);
+const attachLayoutActions = registerNamedLayouts(MODULE_ID, {
+  createButton,
+  snapshotLayout: () => ({ docks: popouts.snapshotLayout(), pins: structuredClone(getSidebarPins()) }),
+  applyLayout(layout) {
+    const pins = structuredClone(layout.pins);
+    detachedSidebar.pinning.applyPins(pins);
+    saveSidebarPins(pins);
+    popouts.applyLayout(layout.docks);
+    detachedSidebar.chat.refresh();
+  },
+  isLayoutLocked,
+  toggleLayoutLock: () => game.settings.set(MODULE_ID, LOCK_LAYOUT_SETTING, !isLayoutLocked())
+});
 registerToolbarWindows(MODULE_ID, { createButton, labelButton }, popouts, () => openSidebar(ui.sidebar));
 registerSidebarDialogPlacement(getSidebarDialogPopup);
 registerSidebarCreationDialogs(() => getSidebarDialogPopup("creation"));
 
 function getSidebarDialogPopup(kind) {
   if (!detachedSidebar) return;
+  if (kind === "layout") return detachedSidebar.popup;
   if (kind === "creation" && game.settings.get(MODULE_ID, CREATION_DIALOG_SETTING) === "sidebar") return detachedSidebar.popup;
   if (kind === "roll" && game.system.id === "dnd5e" && game.settings.get(MODULE_ID, DND5E_ROLL_DIALOG_SETTING)) {
     return detachedSidebar.popup;
@@ -176,6 +219,7 @@ async function openSidebar(sidebar) {
       const tabs = toggle.closest("nav");
       const tooltipDirection = tabs.dataset.tooltipDirection;
       const pinning = createSidebarPinning(sidebar, tabs, popup);
+      const layoutActions = attachLayoutActions(toggle.closest("menu"), popup);
       const chat = supportDetachedChat(popup, {
         showCompactChat: game.settings.get(MODULE_ID, COMPACT_CHAT_SETTING),
         isChatVisible: () => pinning.isTabVisible("chat")
@@ -183,6 +227,7 @@ async function openSidebar(sidebar) {
       function restore() {
         detachedSidebar = undefined;
         pinning.dispose();
+        layoutActions.dispose();
         canvasInset.replaceWith(element);
         element.classList.remove("sidebar-window-detached");
         element.removeEventListener("dragstart", markNoteDrag, true);
@@ -192,7 +237,7 @@ async function openSidebar(sidebar) {
         labelButton(toggle, DETACH_LABEL);
       }
 
-      detachedSidebar = { popup, pinning, chat };
+      detachedSidebar = { popup, pinning, chat, layoutActions };
       element.before(canvasInset);
       sidebar.expand();
       element.classList.add("sidebar-window-detached");
@@ -202,12 +247,25 @@ async function openSidebar(sidebar) {
       labelButton(toggle, RETURN_LABEL);
       return { element, restore };
     });
+    detachedSidebar?.pinning.refresh();
+    detachedSidebar?.chat.refresh();
   } catch (error) {
     console.error("Sidebar Window | Could not open the sidebar window", error);
   } finally {
     opening = false;
     toggle.disabled = false;
   }
+}
+
+function getSidebarPins() {
+  return savedSidebarPins ??= game.settings.get(MODULE_ID, SIDEBAR_PINS_SETTING);
+}
+
+function saveSidebarPins(pins) {
+  savedSidebarPins = pins;
+  pinSaveQueue = pinSaveQueue.then(() => game.settings.set(MODULE_ID, SIDEBAR_PINS_SETTING, pins)).catch(error => {
+    console.error("Canvas Popper | Could not save sidebar pins", error);
+  });
 }
 
 function createSidebarPinning(sidebar, tabs, popup) {
@@ -220,6 +278,7 @@ function createSidebarPinning(sidebar, tabs, popup) {
   const pin = createButton("Pin selected tab", "fa-thumbtack");
   pin.classList.add("sidebar-window-pin");
   tabs.append(pin);
+  let locked = isLayoutLocked();
 
   const empty = document.createElement("p");
   empty.className = "sidebar-window-empty";
@@ -229,13 +288,25 @@ function createSidebarPinning(sidebar, tabs, popup) {
 
   let browsingTab = sidebar.tabGroups.primary;
   let previousTab;
-  let cancelReorder;
+  let cancelInteraction;
   let draggedTab;
 
+  function getAvailableTabButtons() {
+    return [...menu.querySelectorAll("li:not([hidden]) > button[data-group=primary]")];
+  }
+
   function getUnpinnedTabs() {
-    return Array.from(tabs.querySelectorAll("li:not([hidden]) > button[data-group='primary']"))
-      .map(button => button.dataset.tab)
-      .filter(tab => !columns.has(tab));
+    return getAvailableTabButtons().map(button => button.dataset.tab).filter(tab => !columns.has(tab));
+  }
+
+  function savePins() {
+    const available = new Set(getAvailableTabButtons().map(button => button.dataset.tab));
+    const pins = Array.from(columns, ([tab, { width }]) => ({ tab, width }));
+    // Preserve preferences for tabs that are currently unavailable.
+    for (const pin of getSidebarPins()) {
+      if (pin && typeof pin.tab === "string" && !available.has(pin.tab) && !columns.has(pin.tab)) pins.push(pin);
+    }
+    saveSidebarPins(pins);
   }
 
   function getColumnGap() {
@@ -248,14 +319,30 @@ function createSidebarPinning(sidebar, tabs, popup) {
     return Math.max(column.width, minimumPinnedWidth * 2, available);
   }
 
-  function resizeColumn(column, width) {
-    cancelReorder?.();
+  function setInteraction(cancel) {
+    if (cancel && (locked || cancelInteraction)) return false;
+    cancelInteraction = cancel;
+    return true;
+  }
+
+  function getColumnResize(column) {
+    if (locked || cancelInteraction) return;
     const ordered = [...columns.values()];
     const next = ordered[ordered.indexOf(column) + 1];
-    const clamped = Math.max(minimumPinnedWidth, Math.min(maximumWidth(column, next), width));
-    if (next) next.width += column.width - clamped;
-    column.width = clamped;
-    updateWidths();
+    const originalWidth = column.width;
+    const nextWidth = next?.width;
+    function apply(width) {
+      column.width = width;
+      if (next) next.width = nextWidth + originalWidth - width;
+      updateWidths();
+    }
+    return {
+      axis: "x", value: originalWidth, direction: 1,
+      min: minimumPinnedWidth, max: maximumWidth(column, next),
+      apply,
+      commit: savePins,
+      restore: () => apply(originalWidth)
+    };
   }
 
   function updateWidths() {
@@ -282,7 +369,7 @@ function createSidebarPinning(sidebar, tabs, popup) {
     element.classList.toggle("sidebar-window-split", Boolean(columns.size));
     element.style.setProperty("--sidebar-window-main-column", String(columns.size + 1));
     empty.hidden = !columns.size || Boolean(browsingTab);
-    pin.disabled = !browsingTab;
+    pin.disabled = locked || !browsingTab;
     let index = 0;
     for (const [tab, column] of columns) {
       column.index = String(++index);
@@ -306,11 +393,8 @@ function createSidebarPinning(sidebar, tabs, popup) {
     updateWidths();
   }
 
-  pin.addEventListener("click", () => {
-    if (!browsingTab) return;
-    cancelReorder?.();
-    const tab = browsingTab;
-    const button = tabs.querySelector(`button[data-tab="${CSS.escape(tab)}"]`);
+  function addColumn(button, width) {
+    const tab = button.dataset.tab;
     const title = button.getAttribute("aria-label");
     const header = document.createElement("div");
     header.className = "sidebar-window-pinned-header";
@@ -322,24 +406,39 @@ function createSidebarPinning(sidebar, tabs, popup) {
     unpin.classList.add("sidebar-window-unpin");
     header.append(heading, unpin);
 
-    const width = Math.max(minimumPinnedWidth, Math.round(tabs.getBoundingClientRect().width / 3));
-    const column = { header, width };
-    column.divider = createPaneDivider(column, title, minimumPinnedWidth, resizeColumn);
+    const column = { header, width, unpin };
+    const divider = document.createElement("div");
+    divider.className = "sidebar-window-divider";
+    divider.setAttribute("aria-label", "Resize " + title);
+    divider.setAttribute("aria-orientation", "vertical");
+    divider.setAttribute("aria-controls", "sidebar-content");
+    column.divider = divider;
     columns.set(tab, column);
     element.append(header, column.divider);
     header.addEventListener("pointerdown", event => startColumnReorder(event, tab));
     unpin.addEventListener("click", () => unpinTab(tab));
+    installDockSplitter(popup, divider, () => getColumnResize(column), setInteraction);
+    return column;
+  }
 
+  pin.addEventListener("click", () => {
+    if (locked || !browsingTab) return;
+    const button = getAvailableTabButtons().find(button => button.dataset.tab === browsingTab);
+    if (!button) return;
+    cancelInteraction?.();
+    const width = Math.max(minimumPinnedWidth, Math.round(tabs.getBoundingClientRect().width / 3));
+    const { unpin } = addColumn(button, width);
     const alternatives = getUnpinnedTabs();
     const nextTab = alternatives.includes(previousTab) ? previousTab : alternatives[0];
     if (nextTab) sidebar.changeTab(nextTab, "primary");
     refresh();
+    savePins();
     element.scrollLeft = element.scrollWidth;
     (pin.disabled ? unpin : pin).focus({ preventScroll: true });
   });
 
   function startColumnReorder(event, tab) {
-    if (columns.size < 2 || cancelReorder || !event.isPrimary || event.button !== 0 || event.target.closest("button")) return;
+    if (locked || columns.size < 2 || cancelInteraction || !event.isPrimary || event.button !== 0 || event.target.closest("button")) return;
     event.preventDefault();
 
     const { pointerId, clientX: startX, currentTarget: header } = event;
@@ -414,10 +513,10 @@ function createSidebarPinning(sidebar, tabs, popup) {
     }
 
     function finish() {
-      cancelReorder = undefined;
+      cancelInteraction = undefined;
       listeners.abort();
       if (frame) popup.cancelAnimationFrame(frame);
-      if (header.hasPointerCapture(pointerId)) header.releasePointerCapture(pointerId);
+      if (element.hasPointerCapture(pointerId)) element.releasePointerCapture(pointerId);
       if (!draggedTab) return;
       draggedTab = undefined;
       element.style.removeProperty("--sidebar-window-drag-offset");
@@ -442,24 +541,25 @@ function createSidebarPinning(sidebar, tabs, popup) {
       const nextHeader = neighbors[destination]?.[1].header;
       if (nextHeader) nextHeader.before(header, column.divider);
       else element.append(header, column.divider);
+      savePins();
     }
 
     function cancelPointer(pointer) {
       if (pointer.pointerId === pointerId) cancel();
     }
 
-    header.setPointerCapture(pointerId);
-    cancelReorder = cancel;
-    header.addEventListener("pointermove", move, options);
-    header.addEventListener("pointerup", drop, options);
-    header.addEventListener("pointercancel", cancelPointer, options);
-    header.addEventListener("lostpointercapture", cancelPointer, options);
+    element.setPointerCapture(pointerId);
+    cancelInteraction = cancel;
+    element.addEventListener("pointermove", move, options);
+    element.addEventListener("pointerup", drop, options);
+    element.addEventListener("pointercancel", cancelPointer, options);
+    element.addEventListener("lostpointercapture", cancelPointer, options);
     popup.addEventListener("blur", cancel, options);
     popup.addEventListener("resize", cancel, options);
   }
 
   function removeColumn(tab) {
-    cancelReorder?.();
+    cancelInteraction?.();
     const { header, divider } = columns.get(tab);
     header.remove();
     divider.remove();
@@ -467,27 +567,42 @@ function createSidebarPinning(sidebar, tabs, popup) {
   }
 
   function unpinTab(tab) {
+    if (locked) return;
     removeColumn(tab);
     sidebar.changeTab(browsingTab ?? tab, "primary");
     refresh();
     if (tab === "chat") detachedSidebar?.chat.refresh();
+    savePins();
     pin.focus();
   }
 
-  function scrollTabs(event) {
-    const { deltaMode, deltaX, deltaY, ctrlKey } = event;
-    if (ctrlKey || deltaX || !deltaY || menu.scrollWidth <= menu.clientWidth) return;
-
-    let pixelsPerUnit = 1;
-    if (deltaMode === WheelEvent.DOM_DELTA_LINE) pixelsPerUnit = parseFloat(getComputedStyle(menu).fontSize);
-    else if (deltaMode === WheelEvent.DOM_DELTA_PAGE) pixelsPerUnit = menu.clientWidth;
-
-    const previousOffset = menu.scrollLeft;
-    menu.scrollLeft += deltaY * pixelsPerUnit;
-    if (menu.scrollLeft !== previousOffset) event.preventDefault();
+  function setLocked(value) {
+    if (value) cancelInteraction?.();
+    locked = value;
+    element.classList.toggle("sidebar-window-layout-locked", value);
+    pin.disabled = value || !browsingTab;
+    for (const { unpin, divider } of columns.values()) {
+      unpin.disabled = value;
+      setSplitterLocked(divider, value);
+    }
   }
 
-  menu.addEventListener("wheel", scrollTabs, { passive: false });
+  function applyPins(pins) {
+    for (const tab of columns.keys()) removeColumn(tab);
+    const available = new Map(getAvailableTabButtons().map(button => [button.dataset.tab, button]));
+    for (const pin of pins) {
+      if (!pin || !Number.isFinite(pin.width) || columns.has(pin.tab)) continue;
+      const button = available.get(pin.tab);
+      if (button) addColumn(button, Math.max(minimumPinnedWidth, Math.round(pin.width)));
+    }
+    refresh();
+    if (columns.has(sidebar.tabGroups.primary) && browsingTab) sidebar.changeTab(browsingTab, "primary");
+    setLocked(locked);
+  }
+
+  applyPins(getSidebarPins());
+
+  menu.addEventListener("wheel", scrollWheelHorizontally, { passive: false });
   const resizeObserver = new ResizeObserver(updateWidths);
   resizeObserver.observe(element);
   return {
@@ -497,56 +612,21 @@ function createSidebarPinning(sidebar, tabs, popup) {
       return columns.has(tab) || (columns.has(selected) ? browsingTab : selected) === tab;
     },
     refresh,
+    setLocked,
+    applyPins,
     dispose() {
-      menu.removeEventListener("wheel", scrollTabs);
+      menu.removeEventListener("wheel", scrollWheelHorizontally);
       resizeObserver.disconnect();
       for (const tab of columns.keys()) removeColumn(tab);
       if (browsingTab) sidebar.changeTab(browsingTab, "primary");
       refresh();
       pin.remove();
       empty.remove();
+      element.classList.remove("sidebar-window-layout-locked");
       element.style.removeProperty("--sidebar-window-columns");
       element.style.removeProperty("--sidebar-window-main-column");
     }
   };
-}
-
-function createPaneDivider(column, title, minimum, resizeColumn) {
-  const divider = document.createElement("div");
-  divider.className = "sidebar-window-divider";
-  divider.tabIndex = 0;
-  divider.setAttribute("role", "separator");
-  divider.setAttribute("aria-label", `Resize ${title}`);
-  divider.setAttribute("aria-orientation", "vertical");
-  divider.setAttribute("aria-controls", "sidebar-content");
-  divider.setAttribute("aria-valuemin", String(minimum));
-
-  let grabOffset;
-  divider.addEventListener("pointerdown", event => {
-    if (!event.isPrimary || event.button !== 0) return;
-    event.preventDefault();
-    divider.focus();
-    grabOffset = event.clientX - column.header.getBoundingClientRect().right;
-    divider.setPointerCapture(event.pointerId);
-  });
-  divider.addEventListener("pointermove", event => {
-    if (!divider.hasPointerCapture(event.pointerId)) return;
-    const left = column.header.getBoundingClientRect().left;
-    resizeColumn(column, Math.round(event.clientX - left - grabOffset));
-  });
-  divider.addEventListener("keydown", event => {
-    const widths = {
-      ArrowLeft: column.width - 12,
-      ArrowRight: column.width + 12,
-      Home: minimum,
-      End: Infinity
-    };
-    if (!Object.hasOwn(widths, event.key)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    resizeColumn(column, widths[event.key]);
-  });
-  return divider;
 }
 
 function markNoteDrag(event) {

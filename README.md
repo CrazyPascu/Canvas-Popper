@@ -30,7 +30,7 @@ Click **Pop Out All** on the docked Hotbar to open the Sidebar and every enabled
 | Widget | Popout button location | What you can do in the popup |
 | --- | --- | --- |
 | Sidebar | In the sidebar tab strip | Browse tabs, pin tabs side by side, and drag documents between windows. |
-| Scene Controls | At the bottom of the layer buttons | Switch canvas layers, choose tools, and open palettes. The controls stay vertical and act on the main canvas. |
+| Scene Controls | At the bottom of the layer buttons | Switch canvas layers, choose tools, and open palettes on the main canvas. |
 | Hotbar | At the end of the hotbar | Run macros by clicking or using their number shortcuts, switch pages, and drag macros onto or between slots. The lock, mute, and slot context menus are also available. |
 | Players | Next to the latency and FPS indicators | View live player status, expand the inactive player list, and use player context menus. The widget sits at the bottom left when docked. |
 
@@ -43,6 +43,16 @@ A lone widget fills its dock by default. Drag the line along the bottom of a wid
 Focus a resize line to use the arrow keys. Right-click it or press **Delete** while it is focused to restore automatic sizing. Drag an occupied edge dock's border facing Center to resize the dock itself. Sizes are saved with your layout.
 
 With a handle focused, use the arrow keys along the dock to reorder. Hold **Alt** and press an arrow key to move to an edge, or **Alt+Home** to move to the center.
+
+In the top and bottom docks, Scene Controls place the layer buttons in one row and the tools in a second row. Use the mouse wheel over the controls to scroll sideways when they overflow. In the left and right docks, the Hotbar stacks its macro slots vertically. In the top and bottom docks, the inactive Players list opens beside the active players and fills each column from top to bottom. Use the mouse wheel over the list to reach more columns. When the dock gets shallow, the active players and controls share one line. Use the mouse wheel over that line if it extends beyond the available width.
+
+### Named layouts
+
+Use **Save layout** in the detached sidebar header to name the current dock positions, order, sizes, and pinned sidebar columns. Use **Load layout** in the same header to apply a saved arrangement to the open widgets. Saving a layout with the same name asks you before replacing it. Layouts are saved per user.
+
+### Locking the layout
+
+Click **Lock layout** in the detached sidebar header or enable it under **Settings → Configure Settings → Canvas Popper**. The lock prevents moving or resizing widgets, and prevents pinning, unpinning, reordering, or resizing sidebar columns. Unlock the layout to load a saved arrangement. You can still use the widgets and close their popouts.
 
 ### Popout buttons
 
@@ -60,7 +70,7 @@ The detached sidebar puts the tabs your user can access across the top. Selectin
 2. The pinned tab opens on the left and its icon leaves the browsing header. Each additional pin appears between the existing pins and the browsing pane.
 3. Drag a pinned header left or right to rearrange the pinned columns. The whole column moves with the header, and neighboring columns snap into place as you drag.
 4. Drag a divider to resize the neighboring columns. You can also focus the divider and use the left and right arrow keys. Scroll horizontally when the columns extend beyond the window.
-5. Click **Unpin** in a pinned column’s header to restore that tab’s icon. Pins and column widths last for the current popup session.
+5. Click **Unpin** in a pinned column’s header to restore that tab’s icon. Canvas Popper remembers your pinned tabs, their order, and their column widths when you reopen the sidebar.
 
 ![Detached sidebar with Chat and Combat Encounters pinned beside the Scenes tab](assets/sidebar-popout.png)
 
@@ -97,6 +107,7 @@ Open **Settings → Configure Settings → Canvas Popper**. Each setting is save
 | Setting | Default | What it does |
 | --- | --- | --- |
 | **Combine popouts** | None selected | Chooses which widgets share a popout window. |
+| **Lock layout** | Off | Prevents changes to the workspace and pinned sidebar layout. |
 | **Touch mode** | Off | Enlarges buttons, tabs, macro slots, and other interactive controls in Canvas Popper?s detached windows. |
 | **Creation dialog placement** | Window-constrained popups | Chooses where creation dialogs launched from the detached sidebar open. |
 | **D&D 5e roll dialogs in sidebar** | Off | Opens roll configuration from the detached sidebar in D&D 5e worlds. |

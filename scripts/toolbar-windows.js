@@ -1,6 +1,107 @@
 const OPEN_ICON = "fa-arrow-up-right-from-square";
 const RETURN_ICON = "fa-arrow-right-to-bracket";
 
+export function scrollWheelHorizontally(event, element = event.currentTarget) {
+  const { deltaMode, deltaX, deltaY, ctrlKey } = event;
+  if (ctrlKey || deltaX || !deltaY || element.scrollWidth <= element.clientWidth) return;
+
+  let pixelsPerUnit = 1;
+  if (deltaMode === WheelEvent.DOM_DELTA_LINE) {
+    pixelsPerUnit = parseFloat(element.ownerDocument.defaultView.getComputedStyle(element).fontSize);
+  } else if (deltaMode === WheelEvent.DOM_DELTA_PAGE) pixelsPerUnit = element.clientWidth;
+
+  const previousOffset = element.scrollLeft;
+  element.scrollLeft += deltaY * pixelsPerUnit;
+  if (element.scrollLeft !== previousOffset) event.preventDefault();
+}
+
+function inHorizontalDock(element) {
+  return element.closest('.canvas-popper-workspace-region:is([data-position="top"], [data-position="bottom"])');
+}
+
+function scrollSceneControlRows(event) {
+  if (inHorizontalDock(event.currentTarget)) scrollWheelHorizontally(event);
+}
+
+function scrollPlayers(event) {
+  const element = event.currentTarget;
+  if (!inHorizontalDock(element)) return;
+  const panel = event.target.closest("#players-active, #players-inactive");
+  if (panel) scrollWheelHorizontally(event, panel);
+  if (!event.defaultPrevented && element.hasAttribute("data-players-inline")) scrollWheelHorizontally(event);
+}
+
+function watchPlayersLayout(element) {
+  const stopListening = listenForWheel(element, scrollPlayers);
+  const resizeObserver = new ResizeObserver(update);
+  const contentObserver = new MutationObserver(observeContent);
+  const dockObserver = new MutationObserver(update);
+  let observedParent;
+
+  function observeContent() {
+    resizeObserver.disconnect();
+    resizeObserver.observe(element);
+    for (const row of element.querySelectorAll("#players-active .player, #performance-stats")) resizeObserver.observe(row);
+    update();
+  }
+
+  function update() {
+    const region = element.closest(".canvas-popper-workspace-region");
+    const parent = region ?? element.parentElement;
+    if (observedParent !== parent) {
+      dockObserver.disconnect();
+      observedParent = parent;
+      if (parent) dockObserver.observe(parent, { childList: true });
+      if (region) dockObserver.observe(region.parentElement, { attributes: true, attributeFilter: ["data-sized"] });
+    }
+    if (!inHorizontalDock(element)) {
+      element.removeAttribute("data-players-inline");
+      return;
+    }
+
+    const active = element.querySelector("#players-active");
+    const list = active?.querySelector(".players-list");
+    const stats = active?.querySelector("#performance-stats");
+    if (!list || !stats) return;
+    const view = element.ownerDocument.defaultView;
+    const style = view.getComputedStyle(element);
+    const available = region.parentElement.hasAttribute("data-sized")
+      ? element.getBoundingClientRect().height
+      : parseFloat(style.maxHeight) || Infinity;
+
+    // Horizontal rows keep the same item heights and row gaps as the stacked panel.
+    const rows = [...list.children];
+    const gaps = blockSize(view.getComputedStyle(list), "rowGap") * Math.max(0, rows.length - 1);
+    const listHeight = rows.reduce((height, row) => height + row.getBoundingClientRect().height +
+      blockSize(view.getComputedStyle(row), "marginTop", "marginBottom"), gaps);
+    const panelStyle = view.getComputedStyle(active);
+    const panelPadding = parseFloat(panelStyle.getPropertyValue("--players-panel-padding")) || 0;
+    const frameHeight = blockSize(style, "paddingTop", "paddingBottom") + panelPadding * 2 +
+      blockSize(panelStyle, "borderTopWidth", "borderBottomWidth", "rowGap");
+    const required = listHeight + stats.getBoundingClientRect().height + frameHeight;
+    element.toggleAttribute("data-players-inline", available + 0.5 < required);
+  }
+
+  contentObserver.observe(element, { childList: true });
+  observeContent();
+  return () => {
+    stopListening();
+    contentObserver.disconnect();
+    resizeObserver.disconnect();
+    dockObserver.disconnect();
+    element.removeAttribute("data-players-inline");
+  };
+}
+
+function blockSize(style, ...properties) {
+  return properties.reduce((size, property) => size + (parseFloat(style[property]) || 0), 0);
+}
+
+function listenForWheel(element, listener) {
+  element.addEventListener("wheel", listener, { passive: false });
+  return () => element.removeEventListener("wheel", listener);
+}
+
 export function registerToolbarWindows(moduleId, buttons, popouts, openSidebar) {
   let openingAll = false;
   const openControls = registerToolbarWindow({
@@ -16,6 +117,7 @@ export function registerToolbarWindows(moduleId, buttons, popouts, openSidebar) 
       item.append(button);
       element.querySelector(":scope > menu").append(item);
     },
+    onDetach: element => listenForWheel(element, scrollSceneControlRows),
     onRestore: app => app.setPosition({})
   }, moduleId, buttons, popouts);
 
@@ -72,7 +174,8 @@ export function registerToolbarWindows(moduleId, buttons, popouts, openSidebar) 
     className: "sidebar-window-players",
     width: 250,
     height: 240,
-    insertButton: (element, button) => element.querySelector("#performance-stats").append(button)
+    insertButton: (element, button) => element.querySelector("#performance-stats").append(button),
+    onDetach: watchPlayersLayout
   }, moduleId, buttons, popouts);
 
   function syncOpenAllButton(element, detached, opening) {
@@ -167,7 +270,10 @@ function registerToolbarWindow(config, moduleId, { createButton, labelButton }, 
         anchor.className = "sidebar-window-toolbar-anchor";
         anchor.hidden = true;
 
+        const stopListening = config.onDetach?.(element);
+
         function restore() {
+          stopListening?.();
           detached = false;
           anchor.replaceWith(element);
           element.classList.remove(config.className);

@@ -1,3 +1,8 @@
+export function setSplitterLocked(separator, locked) {
+  separator.tabIndex = locked ? -1 : 0;
+  separator.setAttribute("aria-disabled", String(locked));
+}
+
 export function installDockSplitter(popup, separator, getResize, setInteraction) {
   separator.tabIndex = 0;
   separator.setAttribute("role", "separator");
@@ -54,7 +59,7 @@ export function installDockSplitter(popup, separator, getResize, setInteraction)
     if (!resize) return;
     const listeners = new AbortController();
     const options = { signal: listeners.signal };
-    const capture = separator.closest(".canvas-popper-workspace");
+    const capture = separator.closest(".sidebar-window-detached, .canvas-popper-workspace");
     const { pointerId } = event;
     const axis = resize.axis === "x" ? "clientX" : "clientY";
     const start = event[axis];
